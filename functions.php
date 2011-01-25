@@ -2894,7 +2894,8 @@
 
 		$update_method = 0;
 
-		if (strpos($url, '://twitter.com') === false) {
+		if ( !( (!( strpos($url, '://twitter.com') === false)) &&
+			( defined('CONSUMER_KEY') && CONSUMER_KEY != '') ) ) {
 			if (!fetch_file_contents($url)) return 5;
 
 			if (url_is_html($url)) {

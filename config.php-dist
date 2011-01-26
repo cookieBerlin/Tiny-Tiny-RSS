@@ -189,6 +189,9 @@
 	// Your OAuth instance authentication information for Twitter, visit
 	// http://twitter.com/oauth_clients to register your instance.
 
+	define ("IFRAME_URLS","rss.feedsportal.com; www.heise.de");
+	// Enable support for iFrames, for the given domains
+
 	define('CONFIG_VERSION', 21);
 	// Expected config version. Please update this option in config.php
 	// if necessary (after migrating all new options from this file).

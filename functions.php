@@ -19,13 +19,13 @@
 
 	/**
 	 * Return available translations names.
-	 * 
+	 *
 	 * @access public
 	 * @return array A array of available translations.
 	 */
 	function get_translations() {
 		$tr = array(
-					"auto"  => "Detect automatically",					
+					"auto"  => "Detect automatically",
 					"ca_CA" => "Català",
 					"en_US" => "English",
 					"es_ES" => "Español",
@@ -42,60 +42,47 @@
 		return $tr;
 	}
 
-	if (ENABLE_TRANSLATIONS == true) { // If translations are enabled.
-		require_once "lib/accept-to-gettext.php";
-		require_once "lib/gettext/gettext.inc";
+	require_once "lib/accept-to-gettext.php";
+	require_once "lib/gettext/gettext.inc";
 
-		function startup_gettext() {
-	
-			# Get locale from Accept-Language header
-			$lang = al2gt(array_keys(get_translations()), "text/html");
+	function startup_gettext() {
 
-			if (defined('_TRANSLATION_OVERRIDE_DEFAULT')) {
-				$lang = _TRANSLATION_OVERRIDE_DEFAULT;
-			}
+		# Get locale from Accept-Language header
+		$lang = al2gt(array_keys(get_translations()), "text/html");
 
-			if ($_COOKIE["ttrss_lang"] && $_COOKIE["ttrss_lang"] != "auto") {				
-				$lang = $_COOKIE["ttrss_lang"];
-			}
-
-			/* In login action of mobile version */
-			if ($_POST["language"] && defined('MOBILE_VERSION')) {
-				$lang = $_POST["language"];
-				$_COOKIE["ttrss_lang"] = $lang;
-			}
-
-			if ($lang) {
-				if (defined('LC_MESSAGES')) {
-					_setlocale(LC_MESSAGES, $lang);
-				} else if (defined('LC_ALL')) {
-					_setlocale(LC_ALL, $lang);
-				} else {
-					die("can't setlocale(): please set ENABLE_TRANSLATIONS to false in config.php");
-				}
-
-				if (defined('MOBILE_VERSION')) {
-					_bindtextdomain("messages", "../locale");
-				} else {
-					_bindtextdomain("messages", "locale");
-				}
-
-				_textdomain("messages");
-				_bind_textdomain_codeset("messages", "UTF-8");
-			}
+		if (defined('_TRANSLATION_OVERRIDE_DEFAULT')) {
+			$lang = _TRANSLATION_OVERRIDE_DEFAULT;
 		}
 
-		startup_gettext();
+		if ($_COOKIE["ttrss_lang"] && $_COOKIE["ttrss_lang"] != "auto") {
+			$lang = $_COOKIE["ttrss_lang"];
+		}
 
-	} else { // If translations are enabled.
-		function __($msg) {
-			return $msg;
+		/* In login action of mobile version */
+		if ($_POST["language"] && defined('MOBILE_VERSION')) {
+			$lang = $_POST["language"];
+			$_COOKIE["ttrss_lang"] = $lang;
 		}
-		function startup_gettext() {
-			// no-op
-			return true;
+
+		if ($lang) {
+			if (defined('LC_MESSAGES')) {
+				_setlocale(LC_MESSAGES, $lang);
+			} else if (defined('LC_ALL')) {
+				_setlocale(LC_ALL, $lang);
+			}
+
+			if (defined('MOBILE_VERSION')) {
+				_bindtextdomain("messages", "../locale");
+			} else {
+				_bindtextdomain("messages", "locale");
+			}
+
+			_textdomain("messages");
+			_bind_textdomain_codeset("messages", "UTF-8");
 		}
-	} // If translations are enabled.
+	}
+
+	startup_gettext();
 
 	if (defined('MEMCACHE_SERVER')) {
 		$memcache = new Memcache;
@@ -108,11 +95,10 @@
 
 	require_once 'lib/phpmailer/class.phpmailer.php';
 	require_once 'lib/sphinxapi.php';
-	require_once 'lib/twitteroauth/twitteroauth.php';
+	require_once 'lib/tmhoauth/tmhOAuth.php';
 
 	//define('MAGPIE_USER_AGENT_EXT', ' (Tiny Tiny RSS/' . VERSION . ')');
 	define('MAGPIE_OUTPUT_ENCODING', 'UTF-8');
-	define('MAGPIE_CACHE_AGE', 60*15); // 15 minutes
 
 	define('SELF_USER_AGENT', 'Tiny Tiny RSS/' . VERSION . ' (http://tt-rss.org/)');
 	define('MAGPIE_USER_AGENT', SELF_USER_AGENT);
@@ -123,17 +109,24 @@
 	require_once "lib/magpierss/rss_fetch.inc";
 	require_once 'lib/magpierss/rss_utils.inc';
 	require_once 'lib/htmlpurifier/library/HTMLPurifier.auto.php';
+	require_once 'lib/pubsubhubbub/publisher.php';
+	require_once 'lib/pubsubhubbub/subscriber.php';
 
 	$config = HTMLPurifier_Config::createDefault();
 
-	$allowed = "p,a[href],i,em,b,strong,code,pre,blockquote,br,img[src|alt|title],ul,ol,li,h1,h2,h3,h4,s";
+	$allowed = "p,a[href],i,em,b,strong,code,pre,blockquote,br,img[src|alt|title],ul,ol,li,h1,h2,h3,h4,s,object[classid|type|id|name|width|height|codebase],param[name|value],table,tr,td";
 
-	$config->set('HTML', 'Allowed', $allowed);
+	$config->set('HTML.SafeObject', true);
+	@$config->set('HTML', 'Allowed', $allowed);
+	$config->set('Output.FlashCompat', true);
+	$config->set('Attr.EnableID', true);
+	@$config->set('Cache', 'SerializerPath', CACHE_DIR . "/htmlpurifier");
+
 	$purifier = new HTMLPurifier($config);
 
 	/**
 	 * Print a timestamped debug message.
-	 * 
+	 *
 	 * @param string $msg The debug message.
 	 * @return void
 	 */
@@ -147,7 +140,7 @@
 
 	/**
 	 * Purge a feed old posts.
-	 * 
+	 *
 	 * @param mixed $link A database connection.
 	 * @param mixed $feed_id The id of the purged feed.
 	 * @param mixed $purge_interval Olderness of purged posts.
@@ -158,10 +151,10 @@
 	function purge_feed($link, $feed_id, $purge_interval, $debug = false) {
 
 		if (!$purge_interval) $purge_interval = feed_purge_interval($link, $feed_id);
-		
+
 		$rows = -1;
 
-		$result = db_query($link, 
+		$result = db_query($link,
 			"SELECT owner_uid FROM ttrss_feeds WHERE id = '$feed_id'");
 
 		$owner_uid = false;
@@ -190,50 +183,45 @@
 		if (!$purge_unread) $query_limit = " unread = false AND ";
 
 		if (DB_TYPE == "pgsql") {
-/*			$result = db_query($link, "DELETE FROM ttrss_user_entries WHERE
-				marked = false AND feed_id = '$feed_id' AND
-				(SELECT date_updated FROM ttrss_entries WHERE
-					id = ref_id) < NOW() - INTERVAL '$purge_interval days'"); */
-
 			$pg_version = get_pgsql_version($link);
 
 			if (preg_match("/^7\./", $pg_version) || preg_match("/^8\.0/", $pg_version)) {
 
-				$result = db_query($link, "DELETE FROM ttrss_user_entries WHERE 
-					ttrss_entries.id = ref_id AND 
-					marked = false AND 
-					feed_id = '$feed_id' AND 
+				$result = db_query($link, "DELETE FROM ttrss_user_entries WHERE
+					ttrss_entries.id = ref_id AND
+					marked = false AND
+					feed_id = '$feed_id' AND
 					$query_limit
 					ttrss_entries.date_updated < NOW() - INTERVAL '$purge_interval days'");
 
 			} else {
 
-				$result = db_query($link, "DELETE FROM ttrss_user_entries 
-					USING ttrss_entries 
-					WHERE ttrss_entries.id = ref_id AND 
-					marked = false AND 
-					feed_id = '$feed_id' AND 
+				$result = db_query($link, "DELETE FROM ttrss_user_entries
+					USING ttrss_entries
+					WHERE ttrss_entries.id = ref_id AND
+					marked = false AND
+					feed_id = '$feed_id' AND
 					$query_limit
 					ttrss_entries.date_updated < NOW() - INTERVAL '$purge_interval days'");
 			}
 
 			$rows = pg_affected_rows($result);
-			
+
 		} else {
-		
+
 /*			$result = db_query($link, "DELETE FROM ttrss_user_entries WHERE
 				marked = false AND feed_id = '$feed_id' AND
-				(SELECT date_updated FROM ttrss_entries WHERE 
+				(SELECT date_updated FROM ttrss_entries WHERE
 					id = ref_id) < DATE_SUB(NOW(), INTERVAL $purge_interval DAY)"); */
 
-			$result = db_query($link, "DELETE FROM ttrss_user_entries 
-				USING ttrss_user_entries, ttrss_entries 
-				WHERE ttrss_entries.id = ref_id AND 
-				marked = false AND 
-				feed_id = '$feed_id' AND 
+			$result = db_query($link, "DELETE FROM ttrss_user_entries
+				USING ttrss_user_entries, ttrss_entries
+				WHERE ttrss_entries.id = ref_id AND
+				marked = false AND
+				feed_id = '$feed_id' AND
 				$query_limit
 				ttrss_entries.date_updated < DATE_SUB(NOW(), INTERVAL $purge_interval DAY)");
-					
+
 			$rows = mysql_affected_rows($link);
 
 		}
@@ -247,7 +235,7 @@
 
 	/**
 	 * Purge old posts from old feeds. Not used anymore, purging is done after feed update.
-	 * 
+	 *
 	 * @param mixed $link A database connection
 	 * @param boolean $do_output Set to true to enable printed output, false by default.
 	 * @param integer $limit The maximal number of removed posts.
@@ -263,9 +251,9 @@
 		} else {
 			$limit_qpart = "";
 		}
-		
-		$result = db_query($link, 
-			"SELECT id,purge_interval,owner_uid FROM ttrss_feeds 
+
+		$result = db_query($link,
+			"SELECT id,purge_interval,owner_uid FROM ttrss_feeds
 				ORDER BY $random_qpart $limit_qpart");
 
 		while ($line = db_fetch_assoc($result)) {
@@ -275,12 +263,12 @@
 			$owner_uid = $line["owner_uid"];
 
 			if ($purge_interval == 0) {
-			
-				$tmp_result = db_query($link, 
+
+				$tmp_result = db_query($link,
 					"SELECT value FROM ttrss_user_prefs WHERE
 						pref_name = 'PURGE_OLD_DAYS' AND owner_uid = '$owner_uid'");
 
-				if (db_num_rows($tmp_result) != 0) {			
+				if (db_num_rows($tmp_result) != 0) {
 					$purge_interval = db_fetch_result($tmp_result, 0, "value");
 				}
 			}
@@ -292,7 +280,7 @@
 			if ($purge_interval > 0 || FORCE_ARTICLE_PURGE) {
 				purge_feed($link, $feed_id, $purge_interval, $do_output);
 			}
-		}	
+		}
 
 		purge_orphans($link, $do_output);
 
@@ -300,14 +288,14 @@
 
 	function feed_purge_interval($link, $feed_id) {
 
-		$result = db_query($link, "SELECT purge_interval, owner_uid FROM ttrss_feeds 
+		$result = db_query($link, "SELECT purge_interval, owner_uid FROM ttrss_feeds
 			WHERE id = '$feed_id'");
 
 		if (db_num_rows($result) == 1) {
 			$purge_interval = db_fetch_result($result, 0, "purge_interval");
 			$owner_uid = db_fetch_result($result, 0, "owner_uid");
 
-			if ($purge_interval == 0) $purge_interval = get_pref($link, 
+			if ($purge_interval == 0) $purge_interval = get_pref($link,
 				'PURGE_OLD_DAYS', $owner_uid);
 
 			return $purge_interval;
@@ -320,8 +308,8 @@
 	function purge_old_posts($link) {
 
 		$user_id = $_SESSION["uid"];
-	
-		$result = db_query($link, "SELECT id,purge_interval FROM ttrss_feeds 
+
+		$result = db_query($link, "SELECT id,purge_interval FROM ttrss_feeds
 			WHERE owner_uid = '$user_id'");
 
 		while ($line = db_fetch_assoc($result)) {
@@ -334,7 +322,7 @@
 			if ($purge_interval > 0) {
 				purge_feed($link, $feed_id, $purge_interval);
 			}
-		}	
+		}
 
 		purge_orphans($link);
 	}
@@ -342,7 +330,7 @@
 	function purge_orphans($link, $do_output = false) {
 
 		// purge orphaned posts in main content table
-		$result = db_query($link, "DELETE FROM ttrss_entries WHERE 
+		$result = db_query($link, "DELETE FROM ttrss_entries WHERE
 			(SELECT COUNT(int_id) FROM ttrss_user_entries WHERE ref_id = id) = 0");
 
 		if ($do_output) {
@@ -370,8 +358,11 @@
 		}
 	}
 
-	function fetch_file_contents($url, $type = false) {
-		if (USE_CURL) {
+	function fetch_file_contents($url, $type = false, $login = false, $pass = false, $post_query = false) {
+		$login = urlencode($login);
+		$pass = urlencode($pass);
+
+		if (function_exists('curl_init') && !ini_get("open_basedir")) {
 			$ch = curl_init($url);
 
 			curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
@@ -380,6 +371,17 @@
 			curl_setopt($ch, CURLOPT_MAXREDIRS, 20);
 			curl_setopt($ch, CURLOPT_BINARYTRANSFER, true);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_ANY);
+			curl_setopt($ch, CURLOPT_USERAGENT, SELF_USER_AGENT);
+
+			if ($post_query) {
+				curl_setopt($ch, CURLOPT_POST, true);
+				curl_setopt($ch, CURLOPT_POSTFIELDS, $post_query);
+			}
+
+			if ($login && $pass)
+				curl_setopt($ch, CURLOPT_USERPWD, "$login:$pass");
 
 			$contents = @curl_exec($ch);
 			if ($contents === false) {
@@ -387,15 +389,26 @@
 				return false;
 			}
 
+			$http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 			$content_type = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
 			curl_close($ch);
 
-			if ($type && strpos($content_type, "$type") === false) {
+			if ($http_code != 200 || $type && strpos($content_type, "$type") === false) {
 				return false;
 			}
 
 			return $contents;
 		} else {
+			if ($login && $pass && $updated != 3) {
+				$url_parts = array();
+
+				preg_match("/(^[^:]*):\/\/(.*)/", $url, $url_parts);
+
+				if ($url_parts[1] && $url_parts[2]) {
+					$url = $url_parts[1] . "://$login:$pass@" . $url_parts[2];
+				}
+			}
+
 			return @file_get_contents($url);
 		}
 
@@ -405,7 +418,7 @@
 	 * Try to determine the favicon URL for a feed.
 	 * adapted from wordpress favicon plugin by Jeff Minard (http://thecodepro.com/)
 	 * http://dev.wp-plugins.org/file/favatars/trunk/favatars.php
-	 * 
+	 *
 	 * @param string $url A feed or page URL
 	 * @access public
 	 * @return mixed The favicon URL, or false if none was found.
@@ -421,74 +434,27 @@
 			$doc = new DOMDocument();
 			$doc->loadHTML($html);
 			$xpath = new DOMXPath($doc);
-			$entries = $xpath->query('/html/head/link[@rel="shortcut icon"]');
 
+			$base = $xpath->query('/html/head/base');
+			foreach ($base as $b) {
+				$url = $b->getAttribute("href");
+				break;
+			}
+
+			$entries = $xpath->query('/html/head/link[@rel="shortcut icon" or @rel="icon"]');
 			if (count($entries) > 0) {
 				foreach ($entries as $entry) {
 					$favicon_url = rewrite_relative_url($url, $entry->getAttribute("href"));
 					break;
 				}
-			}		
+			}
 		}
 
 		if (!$favicon_url)
 			$favicon_url = rewrite_relative_url($url, "/favicon.ico");
 
-		// Run a test to see if what we have attempted to get actually exists.
-		if(USE_CURL || url_validate($favicon_url)) {
-			return $favicon_url;
-		} else {
-			return false;
-		}
+		return $favicon_url;
 	} // function get_favicon_url
-
-	/**
-	 * Check if a link is a valid and working URL.
-	 * 
-	 * @param mixed $link A URL to check
-	 * @access public
-	 * @return boolean True if the URL is valid, false otherwise.
-	 */
-	function url_validate($link) {
-                
-		$url_parts = @parse_url($link);
-
-		if ( empty( $url_parts["host"] ) )
-				return false;
-
-		if ( !empty( $url_parts["path"] ) ) {
-				$documentpath = $url_parts["path"];
-		} else {
-				$documentpath = "/";
-		}
-
-		if ( !empty( $url_parts["query"] ) )
-				$documentpath .= "?" . $url_parts["query"];
-
-		$host = $url_parts["host"];
-		$port = $url_parts["port"];
-		
-		if ( empty($port) )
-				$port = "80";
-
-		$socket = @fsockopen( $host, $port, $errno, $errstr, 30 );
-		
-		if ( !$socket )
-				return false;
-				
-		fwrite ($socket, "HEAD ".$documentpath." HTTP/1.0\r\nHost: $host\r\n\r\n");
-
-		$http_response = fgets( $socket, 22 );
-
-		$responses = "/(200 OK)|(30[123])/";
-		if ( preg_match($responses, $http_response) ) {
-				fclose($socket);
-				return true;
-		} else {
-				return false;
-		}
-
-	} // function url_validate
 
 	function check_feed_favicon($site_url, $feed, $link) {
 		$favicon_url = get_favicon_url($site_url);
@@ -499,7 +465,6 @@
 
 		if ($favicon_url && !file_exists($icon_file)) {
 			$contents = fetch_file_contents($favicon_url, "image");
-
 			if ($contents) {
 				$fp = fopen($icon_file, "w");
 
@@ -512,34 +477,36 @@
 		}
 	}
 
-	function update_rss_feed($link, $feed, $ignore_daemon = false) {
+	function update_rss_feed($link, $feed, $ignore_daemon = false, $no_cache = false) {
 
 		global $memcache;
 
 		/* Update all feeds with the same URL to utilize memcache */
 
 		if ($memcache) {
-			$result = db_query($link, "SELECT f1.id 
-				FROM ttrss_feeds AS f1, ttrss_feeds AS f2 
+			$result = db_query($link, "SELECT f1.id
+				FROM ttrss_feeds AS f1, ttrss_feeds AS f2
 				WHERE	f2.feed_url = f1.feed_url AND f2.id = '$feed'");
 
 			while ($line = db_fetch_assoc($result)) {
-				update_rss_feed_real($link, $line["id"], $ignore_daemon);
+				update_rss_feed_real($link, $line["id"], $ignore_daemon, $no_cache);
 			}
 		} else {
-			update_rss_feed_real($link, $feed, $ignore_daemon);
+			update_rss_feed_real($link, $feed, $ignore_daemon, $no_cache);
 		}
 	}
 
-	function update_rss_feed_real($link, $feed, $ignore_daemon = false) {
+	function update_rss_feed_real($link, $feed, $ignore_daemon = false, $no_cache = false) {
 
 		global $memcache;
+
+		$debug_enabled = defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug'];
 
 		if (!$_REQUEST["daemon"] && !$ignore_daemon) {
 			return false;
 		}
 
-		if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+		if ($debug_enabled) {
 			_debug("update_rss_feed: start");
 		}
 
@@ -549,8 +516,8 @@
 					$updstart_thresh_qpart = "(ttrss_feeds.last_update_started IS NULL OR ttrss_feeds.last_update_started < NOW() - INTERVAL '120 seconds')";
 				} else {
 					$updstart_thresh_qpart = "(ttrss_feeds.last_update_started IS NULL OR ttrss_feeds.last_update_started < DATE_SUB(NOW(), INTERVAL 120 SECOND))";
-				}			
-	
+				}
+
 			$result = db_query($link, "SELECT id,update_interval,auth_login,
 				auth_pass,cache_images,update_method
 				FROM ttrss_feeds WHERE id = '$feed' AND $updstart_thresh_qpart");
@@ -559,21 +526,27 @@
 
 			$result = db_query($link, "SELECT id,update_interval,auth_login,
 				feed_url,auth_pass,cache_images,update_method,last_updated,
-				owner_uid
+				mark_unread_on_update, owner_uid, update_on_checksum_change,
+				pubsub_state
 				FROM ttrss_feeds WHERE id = '$feed'");
 
 		}
 
 		if (db_num_rows($result) == 0) {
-			if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+			if ($debug_enabled) {
 				_debug("update_rss_feed: feed $feed NOT FOUND/SKIPPED");
-			}		
+			}
 			return false;
 		}
 
 		$update_method = db_fetch_result($result, 0, "update_method");
 		$last_updated = db_fetch_result($result, 0, "last_updated");
 		$owner_uid = db_fetch_result($result, 0, "owner_uid");
+		$mark_unread_on_update = sql_bool_to_bool(db_fetch_result($result,
+			0, "mark_unread_on_update"));
+		$update_on_checksum_change = sql_bool_to_bool(db_fetch_result($result,
+			0, "update_on_checksum_change"));
+		$pubsub_state = db_fetch_result($result, 0, "pubsub_state");
 
 		db_query($link, "UPDATE ttrss_feeds SET last_update_started = NOW()
 			WHERE id = '$feed'");
@@ -593,7 +566,7 @@
 		else
 			$use_simplepie = false;
 
-		if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+		if ($debug_enabled) {
 			_debug("update method: $update_method (feed setting: $update_method) (use simplepie: $use_simplepie)\n");
 		}
 
@@ -620,7 +593,7 @@
 
 		}
 
-		if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+		if ($debug_enabled) {
 			_debug("update_rss_feed: fetching [$fetch_url]...");
 		}
 
@@ -628,7 +601,7 @@
 
 		if ($memcache && $obj = $memcache->get($obj_id)) {
 
-			if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+			if ($debug_enabled) {
 				_debug("update_rss_feed: data found in memcache.");
 			}
 
@@ -638,38 +611,48 @@
 
 			if ($update_method == 3) {
 				$rss = fetch_twitter_rss($link, $fetch_url, $owner_uid);
-					} else if ($update_method == 1) {
+			} else if ($update_method == 1) {
+
+				define('MAGPIE_CACHE_AGE', get_feed_update_interval($link, $feed) * 60);
+				define('MAGPIE_CACHE_ON', !$no_cache);
+				define('MAGPIE_FETCH_TIME_OUT', 60);
+				define('MAGPIE_CACHE_DIR', CACHE_DIR . "/magpie");
+
 				$rss = @fetch_rss($fetch_url);
 			} else {
-				if (!is_dir(SIMPLEPIE_CACHE_DIR)) {
-					mkdir(SIMPLEPIE_CACHE_DIR);
+				$simplepie_cache_dir = CACHE_DIR . "/simplepie";
+
+				if (!is_dir($simplepie_cache_dir)) {
+					mkdir($simplepie_cache_dir);
 				}
-	
+
 				$rss = new SimplePie();
 				$rss->set_useragent(SELF_USER_AGENT);
 	#			$rss->set_timeout(10);
 				$rss->set_feed_url($fetch_url);
 				$rss->set_output_encoding('UTF-8');
-	
+
 				if (SIMPLEPIE_CACHE_IMAGES && $cache_images) {
 
-					if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+					if ($debug_enabled) {
 						_debug("enabling image cache");
 					}
 
 					$rss->set_image_handler("image.php", 'i');
 				}
-	
-				if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+
+				if ($debug_enabled) {
 					_debug("feed update interval (sec): " .
 						get_feed_update_interval($link, $feed)*60);
 				}
-	
-				if (is_dir(SIMPLEPIE_CACHE_DIR)) {
-					$rss->set_cache_location(SIMPLEPIE_CACHE_DIR);
+
+				$rss->enable_cache(!$no_cache);
+
+				if (!$no_cache) {
+					$rss->set_cache_location($simplepie_cache_dir);
 					$rss->set_cache_duration(get_feed_update_interval($link, $feed) * 60);
 				}
-	
+
 				$rss->init();
 			}
 
@@ -678,7 +661,7 @@
 
 //		print_r($rss);
 
-		if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+		if ($debug_enabled) {
 			_debug("update_rss_feed: fetch done, parsing...");
 		}
 
@@ -692,7 +675,7 @@
 
 		if ($fetch_ok) {
 
-			if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+			if ($debug_enabled) {
 				_debug("update_rss_feed: processing feed data...");
 			}
 
@@ -713,7 +696,7 @@
 				$site_url = $rss->channel["link"];
 			}
 
-			if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+			if ($debug_enabled) {
 				_debug("update_rss_feed: checking favicon...");
 			}
 
@@ -727,11 +710,11 @@
 					$feed_title = db_escape_string($rss->channel["title"]);
 				}
 
-				if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+				if ($debug_enabled) {
 					_debug("update_rss_feed: registering title: $feed_title");
 				}
-				
-				db_query($link, "UPDATE ttrss_feeds SET 
+
+				db_query($link, "UPDATE ttrss_feeds SET
 					title = '$feed_title' WHERE id = '$feed'");
 			}
 
@@ -741,7 +724,7 @@
 			}
 
 			if ($site_url && $orig_site_url != db_escape_string($site_url)) {
-				db_query($link, "UPDATE ttrss_feeds SET 
+				db_query($link, "UPDATE ttrss_feeds SET
 					site_url = '$site_url' WHERE id = '$feed'");
 			}
 
@@ -755,21 +738,19 @@
 
 			$icon_url = substr($icon_url, 0, 250);
 
-			if ($icon_url && $orig_icon_url != $icon_url) { 
-				if (USE_CURL || url_validate($icon_url)) {
-					db_query($link, "UPDATE ttrss_feeds SET icon_url = '$icon_url' WHERE id = '$feed'");
-				}
+			if ($icon_url && $orig_icon_url != $icon_url) {
+				db_query($link, "UPDATE ttrss_feeds SET icon_url = '$icon_url' WHERE id = '$feed'");
 			}
 
-			if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+			if ($debug_enabled) {
 				_debug("update_rss_feed: loading filters...");
 			}
 
 			$filters = load_filters($link, $feed, $owner_uid);
 
-			if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
-				print_r($filters);
-			}
+//			if ($debug_enabled) {
+//				print_r($filters);
+//			}
 
 			if ($use_simplepie) {
 				$iterator = $rss->get_items();
@@ -780,24 +761,80 @@
 			}
 
 			if (!is_array($iterator)) {
-				/* db_query($link, "UPDATE ttrss_feeds 
+				/* db_query($link, "UPDATE ttrss_feeds
 					SET last_error = 'Parse error: can\'t find any articles.'
 					WHERE id = '$feed'"); */
 
 				// clear any errors and mark feed as updated if fetched okay
 				// even if it's blank
 
-				if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+				if ($debug_enabled) {
 					_debug("update_rss_feed: entry iterator is not an array, no articles?");
 				}
 
-				db_query($link, "UPDATE ttrss_feeds 
+				db_query($link, "UPDATE ttrss_feeds
 					SET last_updated = NOW(), last_error = '' WHERE id = '$feed'");
 
 				return; // no articles
 			}
 
-			if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+			if ($pubsub_state != 2 && PUBSUBHUBBUB_ENABLED) {
+
+				if ($debug_enabled) _debug("update_rss_feed: checking for PUSH hub...");
+
+				$feed_hub_url = false;
+				if ($use_simplepie) {
+					$links = $rss->get_links('hub');
+
+					if ($links && is_array($links)) {
+						foreach ($links as $l) {
+							$feed_hub_url = $l;
+							break;
+						}
+					}
+
+				} else {
+					$atom = $rss->channel['atom'];
+
+					if ($atom) {
+						if ($atom['link@rel'] == 'hub') {
+							$feed_hub_url = $atom['link@href'];
+						}
+
+						if (!$feed_hub_url && $atom['link#'] > 1) {
+							for ($i = 2; $i <= $atom['link#']; $i++) {
+								if ($atom["link#$i@rel"] == 'hub') {
+									$feed_hub_url = $atom["link#$i@href"];
+									break;
+								}
+							}
+						}
+					} else {
+						$feed_hub_url = $rss->channel['link_hub'];
+					}
+				}
+
+				if ($debug_enabled) _debug("update_rss_feed: feed hub url: $feed_hub_url");
+
+				if ($feed_hub_url && function_exists('curl_init') &&
+					!ini_get("open_basedir")) {
+
+					$callback_url = get_self_url_prefix() .
+						"/backend.php?op=pubsub&id=$feed";
+
+					$s = new Subscriber($feed_hub_url, $callback_url);
+
+					$rc = $s->subscribe($fetch_url);
+
+					if ($debug_enabled)
+						_debug("update_rss_feed: feed hub url found, subscribe request sent.");
+
+					db_query($link, "UPDATE ttrss_feeds SET pubsub_state = 1
+						WHERE id = '$feed'");
+				}
+			}
+
+			if ($debug_enabled) {
 				_debug("update_rss_feed: processing articles...");
 			}
 
@@ -817,11 +854,12 @@
 					$entry_guid = $item["id"];
 
 					if (!$entry_guid) $entry_guid = $item["guid"];
+					if (!$entry_guid) $entry_guid = $item["about"];
 					if (!$entry_guid) $entry_guid = $item["link"];
 					if (!$entry_guid) $entry_guid = make_guid_from_title($item["title"]);
 				}
 
-				if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+				if ($debug_enabled) {
 					_debug("update_rss_feed: guid $entry_guid");
 				}
 
@@ -852,7 +890,7 @@
 
 				$entry_timestamp_fmt = strftime("%Y/%m/%d %H:%M:%S", $entry_timestamp);
 
-				if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+				if ($debug_enabled) {
 					_debug("update_rss_feed: date $entry_timestamp [$entry_timestamp_fmt]");
 				}
 
@@ -870,7 +908,7 @@
 					if (!$entry_link) $entry_link = $item["link"];
 				}
 
-				if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+				if ($debug_enabled) {
 					_debug("update_rss_feed: title $entry_title");
 				}
 
@@ -894,7 +932,7 @@
 					if (!$entry_content) $entry_content = $item["atom_content"];
 					if (!$entry_content) $entry_content = $item["summary"];
 
-					if (!$entry_content || 
+					if (!$entry_content ||
 						strlen($entry_content) < strlen($item["description"])) {
 							$entry_content = $item["description"];
 					};
@@ -903,7 +941,7 @@
 					if (is_array($entry_content)) {
 						$entry_content = $entry_content["encoded"];
 						if (!$entry_content) $entry_content = $entry_content["escaped"];
-					} 
+					}
 				}
 
 				if ($_REQUEST["xdebug"] == 2) {
@@ -924,22 +962,22 @@
 					}
 				} else {
 					$entry_comments = strip_tags($item["comments"]);
-				
+
 					$entry_author = db_escape_string(strip_tags($item['dc']['creator']));
 
 					if ($item['author']) {
-	
+
 						if (is_array($item['author'])) {
-	
+
 							if (!$entry_author) {
 								$entry_author = db_escape_string(strip_tags($item['author']['name']));
 							}
-	
+
 							if (!$entry_author) {
 								$entry_author = db_escape_string(strip_tags($item['author']['email']));
 							}
 						}
-	
+
 						if (!$entry_author) {
 							$entry_author = db_escape_string(strip_tags($item['author']));
 						}
@@ -951,10 +989,10 @@
 				$entry_guid = db_escape_string(strip_tags($entry_guid));
 				$entry_guid = mb_substr($entry_guid, 0, 250);
 
-				$result = db_query($link, "SELECT id FROM	ttrss_entries 
+				$result = db_query($link, "SELECT id FROM	ttrss_entries
 					WHERE guid = '$entry_guid'");
 
-				$entry_content = db_escape_string($entry_content);
+				$entry_content = db_escape_string($entry_content, false);
 
 				$content_hash = "SHA1:" . sha1(strip_tags($entry_content));
 
@@ -971,7 +1009,7 @@
 
 				if (!$num_comments) $num_comments = 0;
 
-				if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+				if ($debug_enabled) {
 					_debug("update_rss_feed: looking for tags [1]...");
 				}
 
@@ -982,14 +1020,14 @@
 				if ($use_simplepie) {
 
 					$additional_tags_src = $item->get_categories();
-					
+
 					if (is_array($additional_tags_src)) {
 						foreach ($additional_tags_src as $tobj) {
 							array_push($additional_tags, $tobj->get_term());
 						}
 					}
 
-					if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+					if ($debug_enabled) {
 						_debug("update_rss_feed: category tags:");
 						print_r($additional_tags);
 					}
@@ -1017,11 +1055,11 @@
 							}
 						}
 					}
-	
+
 					// parse <dc:subject> elements
-	
+
 					$t_ctr = $item['dc']['subject#'];
-	
+
 					if ($t_ctr > 0) {
 						array_push($additional_tags, $item['dc']['subject']);
 
@@ -1033,7 +1071,7 @@
 					}
 				}
 
-				if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+				if ($debug_enabled) {
 					_debug("update_rss_feed: looking for tags [2]...");
 				}
 
@@ -1053,17 +1091,17 @@
 				for ($i = 0; $i < count($entry_tags); $i++)
 					$entry_tags[$i] = mb_strtolower($entry_tags[$i], 'utf-8');
 
-				if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+				if ($debug_enabled) {
 					_debug("update_rss_feed: unfiltered tags found:");
 					print_r($entry_tags);
 				}
 
 				# sanitize content
-				
+
 				$entry_content = sanitize_article_content($entry_content);
 				$entry_title = sanitize_article_content($entry_title);
 
-				if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+				if ($debug_enabled) {
 					_debug("update_rss_feed: done collecting data [TITLE:$entry_title]");
 				}
 
@@ -1071,14 +1109,14 @@
 
 				if (db_num_rows($result) == 0) {
 
-					if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+					if ($debug_enabled) {
 						_debug("update_rss_feed: base guid not found");
 					}
 
 					// base post entry does not exist, create it
 
 					$result = db_query($link,
-						"INSERT INTO ttrss_entries 
+						"INSERT INTO ttrss_entries
 							(title,
 							guid,
 							link,
@@ -1092,13 +1130,13 @@
 							num_comments,
 							author)
 						VALUES
-							('$entry_title', 
-							'$entry_guid', 
+							('$entry_title',
+							'$entry_guid',
 							'$entry_link',
-							'$entry_timestamp_fmt', 
-							'$entry_content', 
+							'$entry_timestamp_fmt',
+							'$entry_content',
 							'$content_hash',
-							$no_orig_date, 
+							$no_orig_date,
 							NOW(),
 							NOW(),
 							'$entry_comments',
@@ -1118,13 +1156,13 @@
 
 				// now it should exist, if not - bad luck then
 
-				$result = db_query($link, "SELECT 
+				$result = db_query($link, "SELECT
 						id,content_hash,no_orig_date,title,
 						".SUBSTRING_FOR_DATE."(date_updated,1,19) as date_updated,
 						".SUBSTRING_FOR_DATE."(updated,1,19) as updated,
 						num_comments
-					FROM 
-						ttrss_entries 
+					FROM
+						ttrss_entries
 					WHERE guid = '$entry_guid'");
 
 				$entry_ref_id = 0;
@@ -1132,7 +1170,7 @@
 
 				if (db_num_rows($result) == 1) {
 
-					if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+					if ($debug_enabled) {
 						_debug("update_rss_feed: base guid found, checking for user record");
 					}
 
@@ -1140,7 +1178,7 @@
 					$orig_content_hash = db_fetch_result($result, 0, "content_hash");
 					$orig_title = db_fetch_result($result, 0, "title");
 					$orig_num_comments = db_fetch_result($result, 0, "num_comments");
-					$orig_date_updated = strtotime(db_fetch_result($result, 
+					$orig_date_updated = strtotime(db_fetch_result($result,
 						0, "date_updated"));
 
 					$ref_id = db_fetch_result($result, 0, "id");
@@ -1151,17 +1189,17 @@
 					// do we allow duplicate posts with same GUID in different feeds?
 					if (get_pref($link, "ALLOW_DUPLICATE_POSTS", $owner_uid, false)) {
 						$dupcheck_qpart = "AND (feed_id = '$feed' OR feed_id IS NULL)";
-					} else { 
+					} else {
 						$dupcheck_qpart = "";
 					}
 
 					/* Collect article tags here so we could filter by them: */
 
-					$article_filters = get_article_filters($filters, $entry_title, 
-						$entry_content, $entry_link, $entry_timestamp, $entry_author, 
+					$article_filters = get_article_filters($filters, $entry_title,
+						$entry_content, $entry_link, $entry_timestamp, $entry_author,
 						$entry_tags);
 
-					if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+					if ($debug_enabled) {
 						_debug("update_rss_feed: article filters: ");
 						if (count($article_filters) != 0) {
 							print_r($article_filters);
@@ -1175,7 +1213,7 @@
 
 					$score = calculate_article_score($article_filters);
 
-					if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+					if ($debug_enabled) {
 						_debug("update_rss_feed: initial score: $score");
 					}
 
@@ -1190,7 +1228,7 @@
 					// okay it doesn't exist - create user entry
 					if (db_num_rows($result) == 0) {
 
-						if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+						if ($debug_enabled) {
 							_debug("update_rss_feed: user record not found, creating...");
 						}
 
@@ -1200,7 +1238,7 @@
 						} else {
 							$unread = 'false';
 							$last_read_qpart = 'NOW()';
-						}						
+						}
 
 						if (find_article_filter($article_filters, 'mark') || $score > 1000) {
 							$marked = 'true';
@@ -1215,13 +1253,23 @@
 						}
 
 						$result = db_query($link,
-							"INSERT INTO ttrss_user_entries 
-								(ref_id, owner_uid, feed_id, unread, last_read, marked, 
-									published, score, tag_cache, label_cache) 
+							"INSERT INTO ttrss_user_entries
+								(ref_id, owner_uid, feed_id, unread, last_read, marked,
+									published, score, tag_cache, label_cache)
 							VALUES ('$ref_id', '$owner_uid', '$feed', $unread,
 								$last_read_qpart, $marked, $published, '$score', '', '')");
 
-						$result = db_query($link, 
+						if (PUBSUBHUBBUB_HUB && $published == 'true') {
+							$rss_link = get_self_url_prefix() .
+								"/backend.php?op=rss&id=-2&key=" .
+								get_feed_access_key($link, -2, false, $owner_uid);
+
+							$p = new Publisher(PUBSUBHUBBUB_HUB);
+
+							$pubsub_result = $p->publish_update($rss_link);
+						}
+
+						$result = db_query($link,
 							"SELECT int_id FROM ttrss_user_entries WHERE
 								ref_id = '$ref_id' AND owner_uid = '$owner_uid' AND
 								feed_id = '$feed' LIMIT 1");
@@ -1230,7 +1278,7 @@
 							$entry_int_id = db_fetch_result($result, 0, "int_id");
 						}
 					} else {
-						if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+						if ($debug_enabled) {
 							_debug("update_rss_feed: user record FOUND");
 						}
 
@@ -1238,34 +1286,30 @@
 						$entry_int_id = db_fetch_result($result, 0, "int_id");
 					}
 
-					if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+					if ($debug_enabled) {
 						_debug("update_rss_feed: RID: $entry_ref_id, IID: $entry_int_id");
 					}
 
 					$post_needs_update = false;
+					$update_insignificant = false;
 
-					if (get_pref($link, "UPDATE_POST_ON_CHECKSUM_CHANGE", $owner_uid, false) &&
-						($content_hash != $orig_content_hash)) {
-//						print "<!-- [$entry_title] $content_hash vs $orig_content_hash -->";
+					if ($orig_num_comments != $num_comments) {
 						$post_needs_update = true;
+						$update_insignificant = true;
+					}
+
+					if ($content_hash != $orig_content_hash) {
+						$post_needs_update = true;
+						$update_insignificant = false;
 					}
 
 					if (db_escape_string($orig_title) != $entry_title) {
 						$post_needs_update = true;
+						$update_insignificant = false;
 					}
 
-					if ($orig_num_comments != $num_comments) {
-						$post_needs_update = true;
-					}
-
-//					this doesn't seem to be very reliable
-//
-//					if ($orig_timestamp != $entry_timestamp && !$orig_no_orig_date) {
-//						$post_needs_update = true;
-//					}
-
-					// if post needs update, update it and mark all user entries 
-					// linking to this post as updated					
+					// if post needs update, update it and mark all user entries
+					// linking to this post as updated
 					if ($post_needs_update) {
 
 						if (defined('DAEMON_EXTENDED_DEBUG')) {
@@ -1274,33 +1318,36 @@
 
 //						print "<!-- post $orig_title needs update : $post_needs_update -->";
 
-						db_query($link, "UPDATE ttrss_entries 
+						db_query($link, "UPDATE ttrss_entries
 							SET title = '$entry_title', content = '$entry_content',
 								content_hash = '$content_hash',
+								updated = '$entry_timestamp_fmt',
 								num_comments = '$num_comments'
 							WHERE id = '$ref_id'");
 
-						if (get_pref($link, "MARK_UNREAD_ON_UPDATE", $owner_uid, false)) {
-							db_query($link, "UPDATE ttrss_user_entries 
-								SET last_read = null, unread = true WHERE ref_id = '$ref_id'");
-						} else {
-							db_query($link, "UPDATE ttrss_user_entries 
-								SET last_read = null WHERE ref_id = '$ref_id' AND unread = false");
+						if (!$update_insignificant) {
+							if ($mark_unread_on_update) {
+								db_query($link, "UPDATE ttrss_user_entries
+									SET last_read = null, unread = true WHERE ref_id = '$ref_id'");
+							} else if ($update_on_checksum_change) {
+								db_query($link, "UPDATE ttrss_user_entries
+									SET last_read = null WHERE ref_id = '$ref_id'
+										AND unread = false");
+							}
 						}
-
 					}
 				}
 
 				db_query($link, "COMMIT");
 
-				if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+				if ($debug_enabled) {
 					_debug("update_rss_feed: assigning labels...");
 				}
 
 				assign_article_to_labels($link, $entry_ref_id, $article_filters,
 					$owner_uid);
 
-				if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+				if ($debug_enabled) {
 					_debug("update_rss_feed: looking for enclosures...");
 				}
 
@@ -1315,7 +1362,7 @@
 						foreach ($encs as $e) {
 							$e_item = array(
 								$e->link, $e->type, $e->length);
-	
+
 							array_push($enclosures, $e_item);
 						}
 					}
@@ -1369,7 +1416,7 @@
 				}
 
 
-				if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+				if ($debug_enabled) {
 					_debug("update_rss_feed: article enclosures:");
 					print_r($enclosures);
 				}
@@ -1410,7 +1457,7 @@
 
 				// Skip boring tags
 
-				$boring_tags = trim_array(split(",", mb_strtolower(get_pref($link, 
+				$boring_tags = trim_array(split(",", mb_strtolower(get_pref($link,
 					'BLACKLISTED_TAGS', $owner_uid, ''), 'utf-8')));
 
 				$filtered_tags = array();
@@ -1422,11 +1469,11 @@
 							array_push($filtered_tags, $tag);
 						}
 					}
-				} 
+				}
 
 				$filtered_tags = array_unique($filtered_tags);
 
-				if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+				if ($debug_enabled) {
 					_debug("update_rss_feed: filtered article tags:");
 					print_r($filtered_tags);
 				}
@@ -1434,23 +1481,23 @@
 				// Save article tags in the database
 
 				if (count($filtered_tags) > 0) {
-				
+
 					db_query($link, "BEGIN");
-			
+
 					foreach ($filtered_tags as $tag) {
 
 						$tag = sanitize_tag($tag);
 						$tag = db_escape_string($tag);
 
 						if (!tag_is_valid($tag)) continue;
-						
-						$result = db_query($link, "SELECT id FROM ttrss_tags		
-							WHERE tag_name = '$tag' AND post_int_id = '$entry_int_id' AND 
+
+						$result = db_query($link, "SELECT id FROM ttrss_tags
+							WHERE tag_name = '$tag' AND post_int_id = '$entry_int_id' AND
 							owner_uid = '$owner_uid' LIMIT 1");
 
 							if ($result && db_num_rows($result) == 0) {
-								
-								db_query($link, "INSERT INTO ttrss_tags 
+
+								db_query($link, "INSERT INTO ttrss_tags
 									(owner_uid,tag_name,post_int_id)
 									VALUES ('$owner_uid','$tag', '$entry_int_id')");
 							}
@@ -1459,33 +1506,37 @@
 					}
 
 					/* update the cache */
-							
+
 					$tags_to_cache = array_unique($tags_to_cache);
-		
+
 					$tags_str = db_escape_string(join(",", $tags_to_cache));
 
-					db_query($link, "UPDATE ttrss_user_entries 
+					db_query($link, "UPDATE ttrss_user_entries
 						SET tag_cache = '$tags_str' WHERE ref_id = '$entry_ref_id'
 						AND owner_uid = $owner_uid");
 
 					db_query($link, "COMMIT");
-				} 
+				}
 
-				if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+				if ($debug_enabled) {
 					_debug("update_rss_feed: article processed");
 				}
-			} 
+			}
 
 			if (!$last_updated) {
-				if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+				if ($debug_enabled) {
 					_debug("update_rss_feed: new feed, catching it up...");
 				}
 				catchup_feed($link, $feed, false, $owner_uid);
 			}
 
-			purge_feed($link, $feed, 0);
+			if ($debug_enabled) {
+				_debug("purging feed...");
+			}
 
-			db_query($link, "UPDATE ttrss_feeds 
+			purge_feed($link, $feed, 0, $debug_enabled);
+
+			db_query($link, "UPDATE ttrss_feeds
 				SET last_updated = NOW(), last_error = '' WHERE id = '$feed'");
 
 //			db_query($link, "COMMIT");
@@ -1498,14 +1549,14 @@
 				$error_msg = mb_substr(magpie_error(), 0, 250);
 			}
 
-			if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+			if ($debug_enabled) {
 				_debug("update_rss_feed: error fetching feed: $error_msg");
 			}
 
 			$error_msg = db_escape_string($error_msg);
 
-			db_query($link, 
-				"UPDATE ttrss_feeds SET last_error = '$error_msg', 
+			db_query($link,
+				"UPDATE ttrss_feeds SET last_error = '$error_msg',
 					last_updated = NOW() WHERE id = '$feed'");
 		}
 
@@ -1513,7 +1564,7 @@
 			unset($rss);
 		}
 
-		if (defined('DAEMON_EXTENDED_DEBUG') || $_REQUEST['xdebug']) {
+		if ($debug_enabled) {
 			_debug("update_rss_feed: done");
 		}
 
@@ -1526,7 +1577,7 @@
 				$sel = "selected=\"1\"";
 			 else
 			 	$sel = "";
-			
+
 			print "<option value=\"$v\" $sel>$v</option>";
 		}
 		print "</select>";
@@ -1539,7 +1590,7 @@
 				$sel = 'selected="selected"';
 			 else
 			 	$sel = "";
-			
+
 			print "<option $sel value=\"$v\">".$values[$v]."</option>";
 		}
 
@@ -1551,9 +1602,9 @@
 
 		if ($filters["title"]) {
 			foreach ($filters["title"] as $filter) {
-				$reg_exp = $filter["reg_exp"];		
-				$inverse = $filter["inverse"];	
-				if ((!$inverse && @preg_match("/$reg_exp/i", $title)) || 
+				$reg_exp = $filter["reg_exp"];
+				$inverse = $filter["inverse"];
+				if ((!$inverse && @preg_match("/$reg_exp/i", $title)) ||
 						($inverse && !@preg_match("/$reg_exp/i", $title))) {
 
 					array_push($matches, array($filter["action"], $filter["action_param"]));
@@ -1566,17 +1617,17 @@
 				$reg_exp = $filter["reg_exp"];
 				$inverse = $filter["inverse"];
 
-				if ((!$inverse && @preg_match("/$reg_exp/i", $content)) || 
+				if ((!$inverse && @preg_match("/$reg_exp/i", $content)) ||
 						($inverse && !@preg_match("/$reg_exp/i", $content))) {
 
 					array_push($matches, array($filter["action"], $filter["action_param"]));
-				}		
+				}
 			}
 		}
 
 		if ($filters["both"]) {
-			foreach ($filters["both"] as $filter) {			
-				$reg_exp = $filter["reg_exp"];		
+			foreach ($filters["both"] as $filter) {
+				$reg_exp = $filter["reg_exp"];
 				$inverse = $filter["inverse"];
 
 				if ($inverse) {
@@ -1597,9 +1648,9 @@
 				$reg_exp = $filter["reg_exp"];
 				$inverse = $filter["inverse"];
 
-				if ((!$inverse && @preg_match("/$reg_exp/i", $link)) || 
+				if ((!$inverse && @preg_match("/$reg_exp/i", $link)) ||
 						($inverse && !@preg_match("/$reg_exp/i", $link))) {
-						
+
 					array_push($matches, array($filter["action"], $filter["action_param"]));
 				}
 			}
@@ -1629,13 +1680,13 @@
 					}
 				}
 			}
-		} 
+		}
 
 		if ($filters["author"]) {
 			foreach ($filters["author"] as $filter) {
-				$reg_exp = $filter["reg_exp"];		
-				$inverse = $filter["inverse"];	
-				if ((!$inverse && @preg_match("/$reg_exp/i", $author)) || 
+				$reg_exp = $filter["reg_exp"];
+				$inverse = $filter["inverse"];
+				if ((!$inverse && @preg_match("/$reg_exp/i", $author)) ||
 						($inverse && !@preg_match("/$reg_exp/i", $author))) {
 
 					array_push($matches, array($filter["action"], $filter["action_param"]));
@@ -1651,11 +1702,11 @@
 				$reg_exp = $filter["reg_exp"];
 				$inverse = $filter["inverse"];
 
-				if ((!$inverse && @preg_match("/$reg_exp/i", $tag_string)) || 
+				if ((!$inverse && @preg_match("/$reg_exp/i", $tag_string)) ||
 						($inverse && !@preg_match("/$reg_exp/i", $tag_string))) {
 
 					array_push($matches, array($filter["action"], $filter["action_param"]));
-				}		
+				}
 			}
 		}
 
@@ -1698,7 +1749,7 @@
 
 	function print_radio($id, $default, $true_is, $values, $attributes = "") {
 		foreach ($values as $v) {
-		
+
 			if ($v == $default)
 				$sel = "checked";
 			 else
@@ -1709,8 +1760,8 @@
 			} else {
 				$sel .= " value=\"0\"";
 			}
-			
-			print "<input class=\"noborder\" dojoType=\"dijit.form.RadioButton\" 
+
+			print "<input class=\"noborder\" dojoType=\"dijit.form.RadioButton\"
 				type=\"radio\" $sel $attributes name=\"$id\">&nbsp;$v&nbsp;";
 
 		}
@@ -1732,14 +1783,14 @@
 		db_query($link, "BEGIN");
 
 		$result = db_query($link, "SELECT pref_name,def_value FROM ttrss_prefs");
-		
-		$u_result = db_query($link, "SELECT pref_name 
+
+		$u_result = db_query($link, "SELECT pref_name
 			FROM ttrss_user_prefs WHERE owner_uid = '$uid' $profile_qpart");
 
 		$active_prefs = array();
 
 		while ($line = db_fetch_assoc($u_result)) {
-			array_push($active_prefs, $line["pref_name"]);			
+			array_push($active_prefs, $line["pref_name"]);
 		}
 
 		while ($line = db_fetch_assoc($result)) {
@@ -1748,12 +1799,12 @@
 
 				if (get_schema_version($link) < 63) {
 					db_query($link, "INSERT INTO ttrss_user_prefs
-						(owner_uid,pref_name,value) VALUES 
+						(owner_uid,pref_name,value) VALUES
 						('$uid', '".$line["pref_name"]."','".$line["def_value"]."')");
 
 				} else {
 					db_query($link, "INSERT INTO ttrss_user_prefs
-						(owner_uid,pref_name,value, profile) VALUES 
+						(owner_uid,pref_name,value, profile) VALUES
 						('$uid', '".$line["pref_name"]."','".$line["def_value"]."', $profile)");
 				}
 
@@ -1766,7 +1817,7 @@
 
 	function lookup_user_id($link, $user) {
 
-		$result = db_query($link, "SELECT id FROM ttrss_users WHERE 
+		$result = db_query($link, "SELECT id FROM ttrss_users WHERE
 			login = '$login'");
 
 		if (db_num_rows($result) == 1) {
@@ -1776,18 +1827,15 @@
 		}
 	}
 
-	function http_authenticate_user($link) {
-
-//		error_log("http_authenticate_user: ".$_SERVER["PHP_AUTH_USER"]."\n", 3, '/tmp/tt-rss.log');
-
+/*	function http_authenticate_user($link) {
 		if (!$_SERVER["PHP_AUTH_USER"]) {
 
 			header('WWW-Authenticate: Basic realm="Tiny Tiny RSS RSSGen"');
 			header('HTTP/1.0 401 Unauthorized');
 			exit;
-					
+
 		} else {
-			$auth_result = authenticate_user($link, 
+			$auth_result = authenticate_user($link,
 				$_SERVER["PHP_AUTH_USER"], $_SERVER["PHP_AUTH_PW"]);
 
 			if (!$auth_result) {
@@ -1798,6 +1846,49 @@
 		}
 
 		return true;
+	} */
+
+	function get_ssl_certificate_id() {
+		if ($_SERVER["REDIRECT_SSL_CLIENT_M_SERIAL"]) {
+			return sha1($_SERVER["REDIRECT_SSL_CLIENT_M_SERIAL"] .
+				$_SERVER["REDIRECT_SSL_CLIENT_V_START"] .
+				$_SERVER["REDIRECT_SSL_CLIENT_V_END"] .
+				$_SERVER["REDIRECT_SSL_CLIENT_S_DN"]);
+		}
+		return "";
+	}
+
+	function get_login_by_ssl_certificate($link) {
+
+		$cert_serial = db_escape_string(get_ssl_certificate_id());
+
+		if ($cert_serial) {
+			$result = db_query($link, "SELECT login FROM ttrss_user_prefs, ttrss_users
+				WHERE pref_name = 'SSL_CERT_SERIAL' AND value = '$cert_serial' AND
+				owner_uid = ttrss_users.id");
+
+			if (db_num_rows($result) != 0) {
+				return db_escape_string(db_fetch_result($result, 0, "login"));
+			}
+		}
+
+		return "";
+	}
+
+	function get_remote_user($link) {
+
+		if (defined('ALLOW_REMOTE_USER_AUTH') && ALLOW_REMOTE_USER_AUTH) {
+			return db_escape_string($_SERVER["REMOTE_USER"]);
+		}
+
+		return db_escape_string(get_login_by_ssl_certificate($link));
+	}
+
+	function get_remote_fakepass($link) {
+		if (get_remote_user($link))
+			return "******";
+		else
+			return "";
 	}
 
 	function authenticate_user($link, $login, $password, $force_auth = false) {
@@ -1808,14 +1899,28 @@
 			$pwd_hash2 = encrypt_password($password, $login);
 			$login = db_escape_string($login);
 
-			if (defined('ALLOW_REMOTE_USER_AUTH') && ALLOW_REMOTE_USER_AUTH 
-					&& $_SERVER["REMOTE_USER"] && $login != "admin") {
+			$remote_user = get_remote_user($link);
 
-				$login = db_escape_string($_SERVER["REMOTE_USER"]);
+			if ($remote_user && $remote_user == $login && $login != "admin") {
+
+				$login = $remote_user;
 
 				$query = "SELECT id,login,access_level,pwd_hash
 	            FROM ttrss_users WHERE
 					login = '$login'";
+
+				if (defined('AUTO_CREATE_USER') && AUTO_CREATE_USER
+						&& $_SERVER["REMOTE_USER"]) {
+					$result = db_query($link, $query);
+
+					// First login ?
+					if (db_num_rows($result) == 0) {
+						$query = "INSERT INTO ttrss_users
+								(login,access_level,last_login,created)
+								VALUES ('$login', 0, null, NOW())";
+						db_query($link, $query);
+					}
+				}
 
 			} else {
 				$query = "SELECT id,login,access_level,pwd_hash
@@ -1825,25 +1930,42 @@
 			}
 
 			$result = db_query($link, $query);
-	
+
 			if (db_num_rows($result) == 1) {
 				$_SESSION["uid"] = db_fetch_result($result, 0, "id");
 				$_SESSION["name"] = db_fetch_result($result, 0, "login");
 				$_SESSION["access_level"] = db_fetch_result($result, 0, "access_level");
-	
-				db_query($link, "UPDATE ttrss_users SET last_login = NOW() WHERE id = " . 
+
+				db_query($link, "UPDATE ttrss_users SET last_login = NOW() WHERE id = " .
 					$_SESSION["uid"]);
-	
+
+
+				// LemonLDAP can send user informations via HTTP HEADER
+				if (defined('AUTO_CREATE_USER') && AUTO_CREATE_USER){
+					// update user name
+					if ($_SERVER['HTTP_USER_NAME']){
+						$fullname = db_escape_string($_SERVER['HTTP_USER_NAME']);
+						db_query($link, "UPDATE ttrss_users SET full_name = '$fullname' WHERE id = " .
+							$_SESSION["uid"]);
+					}
+					// update user mail
+					if ($_SERVER['HTTP_USER_MAIL']){
+						$email = db_escape_string($_SERVER['HTTP_USER_MAIL']);
+						db_query($link, "UPDATE ttrss_users SET email = '$email' WHERE id = " .
+							$_SESSION["uid"]);
+					}
+				}
+
 				$_SESSION["ip_address"] = $_SERVER["REMOTE_ADDR"];
 				$_SESSION["pwd_hash"] = db_fetch_result($result, 0, "pwd_hash");
 
 				$_SESSION["last_version_check"] = time();
-	
+
 				initialize_user_prefs($link, $_SESSION["uid"]);
-	
+
 				return true;
 			}
-	
+
 			return false;
 
 		} else {
@@ -1852,9 +1974,9 @@
 			$_SESSION["name"] = "admin";
 
 			$_SESSION["ip_address"] = $_SERVER["REMOTE_ADDR"];
-	
+
 			initialize_user_prefs($link, $_SESSION["uid"]);
-	
+
 			return true;
 		}
 	}
@@ -1862,14 +1984,14 @@
 	function make_password($length = 8) {
 
 		$password = "";
-		$possible = "0123456789abcdfghjkmnpqrstvwxyzABCDFGHJKMNPQRSTVWXYZ"; 
-		
-   	$i = 0; 
-    
-		while ($i < $length) { 
+		$possible = "0123456789abcdfghjkmnpqrstvwxyzABCDFGHJKMNPQRSTVWXYZ";
+
+   	$i = 0;
+
+		while ($i < $length) {
 			$char = substr($possible, mt_rand(0, strlen($possible)-1), 1);
-        
-			if (!strstr($password, $char)) { 
+
+			if (!strstr($password, $char)) {
 				$password .= $char;
 				$i++;
 			}
@@ -1879,7 +2001,7 @@
 
 	// this is called after user is created to initialize default feeds, labels
 	// or whatever else
-	
+
 	// user preferences are checked on every login, not here
 
 	function initialize_user($link, $uid) {
@@ -1923,7 +2045,7 @@
 		};
 
 		if ($check_ip && strpos($_SERVER['REMOTE_ADDR'], $check_ip) !== 0) {
-			$_SESSION["login_error_msg"] = 
+			$_SESSION["login_error_msg"] =
 				__("Session failed to validate (incorrect IP)");
 			return false;
 		}
@@ -1933,7 +2055,7 @@
 
 		if ($_SESSION["uid"]) {
 
-			$result = db_query($link, 
+			$result = db_query($link,
 				"SELECT pwd_hash FROM ttrss_users WHERE id = '".$_SESSION["uid"]."'");
 
 			$pwd_hash = db_fetch_result($result, 0, "pwd_hash");
@@ -1960,7 +2082,7 @@
 
 			$login_action = $_POST["login_action"];
 
-			# try to authenticate user if called from login form			
+			# try to authenticate user if called from login form
 			if ($login_action == "do_login") {
 				$login = $_POST["login"];
 				$password = $_POST["password"];
@@ -2001,9 +2123,9 @@
 			}
 
 			if (!$_SESSION["uid"] || !validate_session($link)) {
-				if (defined('ALLOW_REMOTE_USER_AUTH') && ALLOW_REMOTE_USER_AUTH
-					&& $_SERVER["REMOTE_USER"] && defined('AUTO_LOGIN') && AUTO_LOGIN) {
-				    authenticate_user($link,$_SERVER['REMOTE_USER'],null);
+
+				if (get_remote_user($link) && AUTO_LOGIN) {
+				    authenticate_user($link, get_remote_user($link), null);
 				    $_SESSION["ref_schema_version"] = get_schema_version($link, true);
 				} else {
 				    render_login_form($link, $mobile);
@@ -2012,11 +2134,11 @@
 				}
 			} else {
 				/* bump login timestamp */
-				db_query($link, "UPDATE ttrss_users SET last_login = NOW() WHERE id = " . 
+				db_query($link, "UPDATE ttrss_users SET last_login = NOW() WHERE id = " .
 					$_SESSION["uid"]);
 
 				if ($_SESSION["language"] && SESSION_COOKIE_LIFETIME > 0) {
-					setcookie("ttrss_lang", $_SESSION["language"], 
+					setcookie("ttrss_lang", $_SESSION["language"],
 						time() + SESSION_COOKIE_LIFETIME);
 				}
 			}
@@ -2109,7 +2231,7 @@
 		$time = time();
 
 		if ($t) {
-			print "<link rel=\"stylesheet\" type=\"text/css\" 
+			print "<link rel=\"stylesheet\" type=\"text/css\"
 				href=\"$t/theme.css?$time \">";
 			if (file_exists("$t/theme.js")) {
 				print "<script type=\"text/javascript\" src=\"$t/theme.js?$time\">
@@ -2128,7 +2250,7 @@
 		foreach ($themes as $t) {
 			if (is_file("$t/theme.ini")) {
 				$ini = parse_ini_file("$t/theme.ini", true);
-				if ($ini['theme']['version'] >= THEME_VERSION_REQUIRED && 
+				if ($ini['theme']['version'] >= THEME_VERSION_REQUIRED &&
 							!$ini['theme']['disabled']) {
 					$entry = array();
 					$entry["path"] = $t;
@@ -2143,6 +2265,24 @@
 		}
 
 		return $rv;
+	}
+
+	function convert_timestamp($timestamp, $source_tz, $dest_tz) {
+
+		try {
+			$source_tz = new DateTimeZone($source_tz);
+		} catch (Exception $e) {
+			$source_tz = new DateTimeZone('UTC');
+		}
+
+		try {
+			$dest_tz = new DateTimeZone($dest_tz);
+		} catch (Exception $e) {
+			$dest_tz = new DateTimeZone('UTC');
+		}
+
+		$dt = new DateTime(date('Y-m-d H:i:s', $timestamp), $source_tz);
+		return $dt->format('U') + $dest_tz->getOffset($dt);
 	}
 
 	function make_local_datetime($link, $timestamp, $long, $owner_uid = false,
@@ -2163,8 +2303,8 @@
 		$dt = new DateTime($timestamp, new DateTimeZone('UTC'));
 		$user_timestamp = $dt->format('U') + $user_tz->getOffset($dt);
 
-		if (!$no_smart_dt && get_pref($link, 'HEADLINES_SMART_DATE', $owner_uid)) {
-			return smart_date_time($link, $user_timestamp, 
+		if (!$no_smart_dt) {
+			return smart_date_time($link, $user_timestamp,
 				$user_tz->getOffset($dt), $owner_uid);
 		} else {
 			if ($long)
@@ -2209,13 +2349,13 @@
 	}
 
 	function sql_bool_to_bool($s) {
-		if ($s == "t" || $s == "1") {
+		if ($s == "t" || $s == "1" || $s == "true") {
 			return true;
 		} else {
 			return false;
 		}
 	}
-	
+
 	function bool_to_sql_bool($s) {
 		if ($s) {
 			return "true";
@@ -2225,24 +2365,29 @@
 	}
 
 	function toggleEvenOdd($a) {
-		if ($a == "even") 
+		if ($a == "even")
 			return "odd";
 		else
 			return "even";
 	}
 
+	// Session caching removed due to causing wrong redirects to upgrade
+	// script when get_schema_version() is called on an obsolete session
+	// created on a previous schema version.
 	function get_schema_version($link, $nocache = false) {
-		if (!$_SESSION["schema_version"] || $nocache) {
+//		if (!$_SESSION["schema_version"] || $nocache) {
 			$result = db_query($link, "SELECT schema_version FROM ttrss_version");
 			$version = db_fetch_result($result, 0, "schema_version");
 			$_SESSION["schema_version"] = $version;
 			return $version;
-		} else {
-			return $_SESSION["schema_version"];
-		}
+//		} else {
+//			return $_SESSION["schema_version"];
+//		}
 	}
 
 	function sanity_check($link) {
+
+		global $ERRORS;
 
 		$error_code = 0;
 		$schema_version = get_schema_version($link);
@@ -2262,12 +2407,7 @@
 			$error_code = 12;
 		}
 
-		if ($error_code != 0) {
-			print_error_xml($error_code);
-			return false;
-		} else {
-			return true;
-		}
+		return array("code" => $error_code, "message" => $ERRORS[$error_code]);
 	}
 
 	function file_is_locked($filename) {
@@ -2337,43 +2477,43 @@
 						} else {
 							$cat_qpart = "cat_id IS NULL";
 						}
-					
-						$tmp_result = db_query($link, "SELECT id 
+
+						$tmp_result = db_query($link, "SELECT id
 							FROM ttrss_feeds WHERE $cat_qpart AND owner_uid = $owner_uid");
 
 						while ($tmp_line = db_fetch_assoc($tmp_result)) {
 
 							$tmp_feed = $tmp_line["id"];
 
-							db_query($link, "UPDATE ttrss_user_entries 
-								SET unread = false,last_read = NOW() 
+							db_query($link, "UPDATE ttrss_user_entries
+								SET unread = false,last_read = NOW()
 								WHERE feed_id = '$tmp_feed' AND owner_uid = $owner_uid");
 						}
 					} else if ($feed == -2) {
 
 
-						db_query($link, "UPDATE ttrss_user_entries 
-							SET unread = false,last_read = NOW() WHERE (SELECT COUNT(*) 
-								FROM ttrss_user_labels2 WHERE article_id = ref_id) > 0 
+						db_query($link, "UPDATE ttrss_user_entries
+							SET unread = false,last_read = NOW() WHERE (SELECT COUNT(*)
+								FROM ttrss_user_labels2 WHERE article_id = ref_id) > 0
 							AND unread = true AND owner_uid = $owner_uid");
 					}
 
 				} else if ($feed > 0) {
 
-					db_query($link, "UPDATE ttrss_user_entries 
-							SET unread = false,last_read = NOW() 
+					db_query($link, "UPDATE ttrss_user_entries
+							SET unread = false,last_read = NOW()
 							WHERE feed_id = '$feed' AND owner_uid = $owner_uid");
-					
+
 				} else if ($feed < 0 && $feed > -10) { // special, like starred
 
 					if ($feed == -1) {
-						db_query($link, "UPDATE ttrss_user_entries 
+						db_query($link, "UPDATE ttrss_user_entries
 							SET unread = false,last_read = NOW()
 							WHERE marked = true AND owner_uid = $owner_uid");
 					}
 
 					if ($feed == -2) {
-						db_query($link, "UPDATE ttrss_user_entries 
+						db_query($link, "UPDATE ttrss_user_entries
 							SET unread = false,last_read = NOW()
 							WHERE published = true AND owner_uid = $owner_uid");
 					}
@@ -2383,16 +2523,16 @@
 						$intl = get_pref($link, "FRESH_ARTICLE_MAX_AGE");
 
 						if (DB_TYPE == "pgsql") {
-							$match_part = "updated > NOW() - INTERVAL '$intl hour' "; 
+							$match_part = "updated > NOW() - INTERVAL '$intl hour' ";
 						} else {
-							$match_part = "updated > DATE_SUB(NOW(), 
+							$match_part = "updated > DATE_SUB(NOW(),
 								INTERVAL $intl HOUR) ";
 						}
 
-						$result = db_query($link, "SELECT id FROM ttrss_entries, 
+						$result = db_query($link, "SELECT id FROM ttrss_entries,
 							ttrss_user_entries WHERE $match_part AND
 							unread = true AND
-						  	ttrss_user_entries.ref_id = ttrss_entries.id AND	
+						  	ttrss_user_entries.ref_id = ttrss_entries.id AND
 							owner_uid = $owner_uid");
 
 						$affected_ids = array();
@@ -2405,7 +2545,7 @@
 					}
 
 					if ($feed == -4) {
-						db_query($link, "UPDATE ttrss_user_entries 
+						db_query($link, "UPDATE ttrss_user_entries
 							SET unread = false,last_read = NOW()
 							WHERE owner_uid = $owner_uid");
 					}
@@ -2414,8 +2554,8 @@
 
 					$label_id = -$feed - 11;
 
-					db_query($link, "UPDATE ttrss_user_entries, ttrss_user_labels2 
-						SET unread = false, last_read = NOW() 
+					db_query($link, "UPDATE ttrss_user_entries, ttrss_user_labels2
+						SET unread = false, last_read = NOW()
 							WHERE label_id = '$label_id' AND unread = true
 							AND owner_uid = '$owner_uid' AND ref_id = article_id");
 
@@ -2433,7 +2573,7 @@
 
 				while ($line = db_fetch_assoc($result)) {
 					db_query($link, "UPDATE ttrss_user_entries SET
-						unread = false, last_read = NOW() 
+						unread = false, last_read = NOW()
 						WHERE int_id = " . $line["post_int_id"]);
 				}
 				db_query($link, "COMMIT");
@@ -2445,20 +2585,16 @@
 		if (!$omode) $omode = "flc";
 
 		$data = getGlobalCounters($link);
-		
+
 		$data = array_merge($data, getVirtCounters($link));
 
 		if (strchr($omode, "l")) $data = array_merge($data, getLabelCounters($link));
 		if (strchr($omode, "f")) $data = array_merge($data, getFeedCounters($link, $active_feed));
 		if (strchr($omode, "t")) $data = array_merge($data, getTagCounters($link));
-		if (strchr($omode, "c")) {			
-			if (get_pref($link, 'ENABLE_FEED_CATS')) {
-				$data = array_merge($data, getCategoryCounters($link));
-			}
-		}
+		if (strchr($omode, "c")) $data = array_merge($data, getCategoryCounters($link));
 
 		return $data;
-	}	
+	}
 
 	function getCategoryCounters($link) {
 		$ret_arr = array();
@@ -2472,9 +2608,9 @@
 
 		$age_qpart = getMaxAgeSubquery();
 
-		$result = db_query($link, "SELECT id AS cat_id, value AS unread 
-			FROM ttrss_feed_categories, ttrss_cat_counters_cache 
-			WHERE ttrss_cat_counters_cache.feed_id = id AND 
+		$result = db_query($link, "SELECT id AS cat_id, value AS unread
+			FROM ttrss_feed_categories, ttrss_cat_counters_cache
+			WHERE ttrss_cat_counters_cache.feed_id = id AND
 			ttrss_feed_categories.owner_uid = " . $_SESSION["uid"]);
 
 		while ($line = db_fetch_assoc($result)) {
@@ -2510,39 +2646,39 @@
 
 			$age_qpart = getMaxAgeSubquery();
 
-			$result = db_query($link, "SELECT id FROM ttrss_feeds WHERE $cat_query 
+			$result = db_query($link, "SELECT id FROM ttrss_feeds WHERE $cat_query
 					AND owner_uid = " . $owner_uid);
-	
+
 			$cat_feeds = array();
 			while ($line = db_fetch_assoc($result)) {
 				array_push($cat_feeds, "feed_id = " . $line["id"]);
 			}
-	
+
 			if (count($cat_feeds) == 0) return 0;
-	
+
 			$match_part = implode(" OR ", $cat_feeds);
-	
-			$result = db_query($link, "SELECT COUNT(int_id) AS unread 
-				FROM ttrss_user_entries,ttrss_entries 
-				WHERE	unread = true AND ($match_part) AND id = ref_id 
+
+			$result = db_query($link, "SELECT COUNT(int_id) AS unread
+				FROM ttrss_user_entries,ttrss_entries
+				WHERE	unread = true AND ($match_part) AND id = ref_id
 				AND $age_qpart AND owner_uid = " . $owner_uid);
-	
+
 			$unread = 0;
-	
+
 			# this needs to be rewritten
 			while ($line = db_fetch_assoc($result)) {
 				$unread += $line["unread"];
 			}
-	
+
 			return $unread;
 		} else if ($cat == -1) {
 			return getFeedUnread($link, -1) + getFeedUnread($link, -2) + getFeedUnread($link, -3) + getFeedUnread($link, 0);
 		} else if ($cat == -2) {
 
 			$result = db_query($link, "
-				SELECT COUNT(unread) AS unread FROM 
-					ttrss_user_entries, ttrss_labels2, ttrss_user_labels2, ttrss_feeds 
-				WHERE label_id = ttrss_labels2.id AND article_id = ref_id AND 
+				SELECT COUNT(unread) AS unread FROM
+					ttrss_user_entries, ttrss_labels2, ttrss_user_labels2, ttrss_feeds
+				WHERE label_id = ttrss_labels2.id AND article_id = ref_id AND
 					ttrss_labels2.owner_uid = '$owner_uid'
 					AND unread = true AND feed_id = ttrss_feeds.id
 					AND ttrss_user_entries.owner_uid = '$owner_uid'");
@@ -2551,15 +2687,15 @@
 
 			return $unread;
 
-		} 
+		}
 	}
 
 	function getMaxAgeSubquery($days = COUNTERS_MAX_AGE) {
 		if (DB_TYPE == "pgsql") {
-			return "ttrss_entries.date_updated > 
+			return "ttrss_entries.date_updated >
 				NOW() - INTERVAL '$days days'";
 		} else {
-			return "ttrss_entries.date_updated > 
+			return "ttrss_entries.date_updated >
 				DATE_SUB(NOW(), INTERVAL $days DAY)";
 		}
 	}
@@ -2572,9 +2708,9 @@
 		if (!$owner_uid) $owner_uid = $_SESSION["uid"];
 
 		$result = db_query($link, "
-			SELECT COUNT(unread) AS unread FROM 
-				ttrss_user_entries, ttrss_labels2, ttrss_user_labels2, ttrss_feeds 
-			WHERE label_id = ttrss_labels2.id AND article_id = ref_id AND 
+			SELECT COUNT(unread) AS unread FROM
+				ttrss_user_entries, ttrss_labels2, ttrss_user_labels2, ttrss_feeds
+			WHERE label_id = ttrss_labels2.id AND article_id = ref_id AND
 				ttrss_labels2.owner_uid = '$owner_uid' AND ttrss_labels2.id = '$label_id'
 				AND unread = true AND feed_id = ttrss_feeds.id
 				AND ttrss_user_entries.owner_uid = '$owner_uid'");
@@ -2602,15 +2738,15 @@
 		$age_qpart = getMaxAgeSubquery();
 
 		if ($is_cat) {
-			return getCategoryUnread($link, $n_feed, $owner_uid);		
+			return getCategoryUnread($link, $n_feed, $owner_uid);
 		} if ($feed != "0" && $n_feed == 0) {
 
 			$feed = db_escape_string($feed);
 
 			$result = db_query($link, "SELECT SUM((SELECT COUNT(int_id)
-				FROM ttrss_user_entries,ttrss_entries WHERE int_id = post_int_id 
+				FROM ttrss_user_entries,ttrss_entries WHERE int_id = post_int_id
 					AND ref_id = id AND $age_qpart
-					AND $unread_qpart)) AS count FROM ttrss_tags 
+					AND $unread_qpart)) AS count FROM ttrss_tags
 				WHERE owner_uid = $owner_uid AND tag_name = '$feed'");
 			return db_fetch_result($result, 0, "count");
 
@@ -2624,7 +2760,7 @@
 			$intl = get_pref($link, "FRESH_ARTICLE_MAX_AGE", $owner_uid);
 
 			if (DB_TYPE == "pgsql") {
-				$match_part .= " AND updated > NOW() - INTERVAL '$intl hour' "; 
+				$match_part .= " AND updated > NOW() - INTERVAL '$intl hour' ";
 			} else {
 				$match_part .= " AND updated > DATE_SUB(NOW(), INTERVAL $intl HOUR) ";
 			}
@@ -2656,24 +2792,24 @@
 				$feeds_qpart = '';
 			}
 
-			$query = "SELECT count(int_id) AS unread 
+			$query = "SELECT count(int_id) AS unread
 				FROM $from_qpart WHERE
-				ttrss_user_entries.ref_id = ttrss_entries.id AND 
+				ttrss_user_entries.ref_id = ttrss_entries.id AND
 				$age_qpart AND
 				$feeds_qpart
 				$unread_qpart AND ($match_part) AND ttrss_user_entries.owner_uid = $owner_uid";
 
 			$result = db_query($link, $query);
-				
+
 		} else {
-		
+
 			$result = db_query($link, "SELECT COUNT(post_int_id) AS unread
-				FROM ttrss_tags,ttrss_user_entries,ttrss_entries 
-				WHERE tag_name = '$feed' AND post_int_id = int_id AND ref_id = ttrss_entries.id 
+				FROM ttrss_tags,ttrss_user_entries,ttrss_entries
+				WHERE tag_name = '$feed' AND post_int_id = int_id AND ref_id = ttrss_entries.id
 				AND $unread_qpart AND $age_qpart AND
 					ttrss_tags.owner_uid = " . $owner_uid);
 		}
-		
+
 		$unread = db_fetch_result($result, 0, "unread");
 
 		return $unread;
@@ -2688,7 +2824,7 @@
 		$result = db_query($link, "SELECT SUM(value) AS c_id FROM ttrss_counters_cache
 			WHERE owner_uid = '$user_id' AND feed_id > 0");
 
-		$c_id = db_fetch_result($result, 0, "c_id"); 
+		$c_id = db_fetch_result($result, 0, "c_id");
 
 		return $c_id;
 	}
@@ -2696,21 +2832,21 @@
 	function getGlobalCounters($link, $global_unread = -1) {
 		$ret_arr = array();
 
-		if ($global_unread == -1) {	
+		if ($global_unread == -1) {
 			$global_unread = getGlobalUnread($link);
 		}
 
-		$cv = array("id" => "global-unread", 
+		$cv = array("id" => "global-unread",
 			"counter" => $global_unread);
 
 		array_push($ret_arr, $cv);
 
-		$result = db_query($link, "SELECT COUNT(id) AS fn FROM 
+		$result = db_query($link, "SELECT COUNT(id) AS fn FROM
 			ttrss_feeds WHERE owner_uid = " . $_SESSION["uid"]);
 
 		$subscribed_feeds = db_fetch_result($result, 0, "fn");
 
-		$cv = array("id" => "subscribed-feeds", 
+		$cv = array("id" => "subscribed-feeds",
 			"counter" => $subscribed_feeds);
 
 		array_push($ret_arr, $cv);
@@ -2719,25 +2855,25 @@
 	}
 
 	function getSubscribedFeeds($link) {
-		$result = db_query($link, "SELECT COUNT(id) AS fn FROM 
+		$result = db_query($link, "SELECT COUNT(id) AS fn FROM
 			ttrss_feeds WHERE owner_uid = " . $_SESSION["uid"]);
 
 		return db_fetch_result($result, 0, "fn");
 	}
 
 	function getTagCounters($link) {
-		
+
 		$ret_arr = array();
 
 		$age_qpart = getMaxAgeSubquery();
 
-		$result = db_query($link, "SELECT tag_name,SUM((SELECT COUNT(int_id) 
-			FROM ttrss_user_entries,ttrss_entries WHERE int_id = post_int_id 
+		$result = db_query($link, "SELECT tag_name,SUM((SELECT COUNT(int_id)
+			FROM ttrss_user_entries,ttrss_entries WHERE int_id = post_int_id
 				AND ref_id = id AND $age_qpart
-				AND unread = true)) AS count FROM ttrss_tags 
-				WHERE owner_uid = ".$_SESSION['uid']." GROUP BY tag_name 
+				AND unread = true)) AS count FROM ttrss_tags
+				WHERE owner_uid = ".$_SESSION['uid']." GROUP BY tag_name
 				ORDER BY count DESC LIMIT 55");
-			
+
 		$tags = array();
 
 		while ($line = db_fetch_assoc($result)) {
@@ -2745,7 +2881,7 @@
 		}
 
 		foreach (array_keys($tags) as $tag) {
-			$unread = $tags[$tag];			
+			$unread = $tags[$tag];
 			$tag = htmlspecialchars($tag);
 
 			$cv = array("id" => $tag,
@@ -2755,7 +2891,7 @@
 			array_push($ret_arr, $cv);
 		}
 
-		return $ret_arr;	
+		return $ret_arr;
 	}
 
 	function getVirtCounters($link) {
@@ -2768,12 +2904,12 @@
 
 			$cv = array("id" => $i,
 				"counter" => $count);
-	
+
 //			if (get_pref($link, 'EXTENDED_FEEDLIST'))
 //				$cv["xmsg"] = getFeedArticles($link, $i)." ".__("total");
 
 			array_push($ret_arr, $cv);
-		} 
+		}
 
 		return $ret_arr;
 	}
@@ -2788,7 +2924,7 @@
 
 		$result = db_query($link, "SELECT id, caption FROM ttrss_labels2
 			WHERE owner_uid = '$owner_uid'");
-	
+
 		while ($line = db_fetch_assoc($result)) {
 
 			$id = -$line["id"] - 11;
@@ -2807,7 +2943,7 @@
 
 			array_push($ret_arr, $cv);
 		}
-	
+
 		return $ret_arr;
 	}
 
@@ -2819,17 +2955,17 @@
 
 		$query = "SELECT ttrss_feeds.id,
 				ttrss_feeds.title,
-				".SUBSTRING_FOR_DATE."(ttrss_feeds.last_updated,1,19) AS last_updated, 
+				".SUBSTRING_FOR_DATE."(ttrss_feeds.last_updated,1,19) AS last_updated,
 				last_error, value AS count
 			FROM ttrss_feeds, ttrss_counters_cache
-			WHERE ttrss_feeds.owner_uid = ".$_SESSION["uid"]."  
+			WHERE ttrss_feeds.owner_uid = ".$_SESSION["uid"]."
 				AND ttrss_counters_cache.feed_id = id";
 
 		$result = db_query($link, $query);
 		$fctrs_modified = false;
 
 		while ($line = db_fetch_assoc($result)) {
-		
+
 			$id = $line["id"];
 			$count = $line["count"];
 			$last_error = htmlspecialchars($line["last_error"]);
@@ -2868,20 +3004,6 @@
 		return $version[1];
 	}
 
-	function print_error_xml($code, $add_msg = "") {
-		global $ERRORS;
-
-		$error_msg = $ERRORS[$code];
-		
-		if ($add_msg) {
-			$error_msg = "$error_msg; $add_msg";
-		}
-		
-		print "<rpc-reply>";
-		print "<error error-code=\"$code\" error-msg=\"$error_msg\"/>";
-		print "</rpc-reply>";
-	}
-
 	/**
 	 * Subscribes the user to the given feed
 	 *
@@ -2901,7 +3023,7 @@
 	 *                     to get all possible feeds.
 	 *                 5 - Couldn't download the URL content.
 	 */
-	function subscribe_to_feed($link, $url, $cat_id = 0, 
+	function subscribe_to_feed($link, $url, $cat_id = 0,
 			$auth_login = '', $auth_pass = '') {
 
 		$url = fix_url($url);
@@ -2910,12 +3032,16 @@
 
 		$update_method = 0;
 
-		if ( !( (!( strpos($url, '://twitter.com') === false)) &&
-			( defined('CONSUMER_KEY') && CONSUMER_KEY != '') ) ) {
-			if (!fetch_file_contents($url)) return 5;
+		$result = db_query($link, "SELECT twitter_oauth FROM ttrss_users
+			WHERE id = ".$_SESSION['uid']);
 
-			if (url_is_html($url)) {
-				$feedUrls = get_feeds_from_html($url);
+		$has_oauth = db_fetch_result($result, 0, 'twitter_oauth');
+
+		if (!$has_oauth || strpos($url, '://api.twitter.com') === false) {
+			if (!fetch_file_contents($url, false, $auth_login, $auth_pass)) return 5;
+
+			if (url_is_html($url, $auth_login, $auth_pass)) {
+				$feedUrls = get_feeds_from_html($url, $auth_login, $auth_pass);
 				if (count($feedUrls) == 0) {
 					return 3;
 				} else if (count($feedUrls) > 1) {
@@ -2926,7 +3052,7 @@
 			}
 
 			} else {
-				if (!fetch_twitter_rss($link, $url, $_SESSION['uid'])) 
+				if (!fetch_twitter_rss($link, $url, $_SESSION['uid']))
 					return 5;
 
 				$update_method = 3;
@@ -2936,24 +3062,24 @@
 		} else {
 			$cat_qpart = "'$cat_id'";
 		}
-	
+
 		$result = db_query($link,
-			"SELECT id FROM ttrss_feeds 
+			"SELECT id FROM ttrss_feeds
 			WHERE feed_url = '$url' AND owner_uid = ".$_SESSION["uid"]);
-	
+
 		if (db_num_rows($result) == 0) {
 			$result = db_query($link,
-				"INSERT INTO ttrss_feeds 
-					(owner_uid,feed_url,title,cat_id, auth_login,auth_pass,update_method) 
-				VALUES ('".$_SESSION["uid"]."', '$url', 
+				"INSERT INTO ttrss_feeds
+					(owner_uid,feed_url,title,cat_id, auth_login,auth_pass,update_method)
+				VALUES ('".$_SESSION["uid"]."', '$url',
 				'[Unknown]', $cat_qpart, '$auth_login', '$auth_pass', '$update_method')");
-	
+
 			$result = db_query($link,
-				"SELECT id FROM ttrss_feeds WHERE feed_url = '$url' 
+				"SELECT id FROM ttrss_feeds WHERE feed_url = '$url'
 					AND owner_uid = " . $_SESSION["uid"]);
-	
+
 			$feed_id = db_fetch_result($result, 0, "id");
-	
+
 			if ($feed_id) {
 				update_rss_feed($link, $feed_id, true);
 			}
@@ -2964,14 +3090,14 @@
 		}
 	}
 
-	function print_feed_select($link, $id, $default_id = "", 
+	function print_feed_select($link, $id, $default_id = "",
 		$attributes = "", $include_all_feeds = true) {
 
 		print "<select id=\"$id\" name=\"$id\" $attributes>";
-		if ($include_all_feeds) { 
+		if ($include_all_feeds) {
 			print "<option value=\"0\">".__('All feeds')."</option>";
 		}
-	
+
 		$result = db_query($link, "SELECT id,title FROM ttrss_feeds
 			WHERE owner_uid = ".$_SESSION["uid"]." ORDER BY title");
 
@@ -2988,16 +3114,16 @@
 
 			$title = truncate_string(htmlspecialchars($line["title"]), 40);
 
-			printf("<option $is_selected value='%d'>%s</option>", 
+			printf("<option $is_selected value='%d'>%s</option>",
 				$line["id"], $title);
 		}
-	
+
 		print "</select>";
 	}
 
-	function print_feed_cat_select($link, $id, $default_id = "", 
+	function print_feed_cat_select($link, $id, $default_id = "",
 		$attributes = "", $include_all_cats = true) {
-		
+
 		print "<select id=\"$id\" name=\"$id\" default=\"$default_id\" onchange=\"catSelectOnChange(this)\" $attributes>";
 
 		if ($include_all_cats) {
@@ -3015,11 +3141,11 @@
 			if ($line["id"] == $default_id) {
 				$is_selected = "selected=\"1\"";
 			} else {
-				$is_selected = "";			
+				$is_selected = "";
 			}
 
 			if ($line["title"])
-				printf("<option $is_selected value='%d'>%s</option>", 
+				printf("<option $is_selected value='%d'>%s</option>",
 					$line["id"], htmlspecialchars($line["title"]));
 		}
 
@@ -3027,7 +3153,7 @@
 
 		print "</select>";
 	}
-	
+
 	function checkbox_to_sql_bool($val) {
 		return ($val == "on") ? "true" : "false";
 	}
@@ -3038,7 +3164,7 @@
 		} else if ($id < -10) {
 			return __("Labels");
 		} else if ($id > 0) {
-			$result = db_query($link, "SELECT ttrss_feed_categories.title 
+			$result = db_query($link, "SELECT ttrss_feed_categories.title
 				FROM ttrss_feeds, ttrss_feed_categories WHERE ttrss_feeds.id = '$id' AND
 					cat_id = ttrss_feed_categories.id");
 			if (db_num_rows($result) == 1) {
@@ -3073,7 +3199,7 @@
 			if ($id < -10) {
 				return "images/label.png";
 			} else {
-				if (file_exists(ICONS_DIR . "/$id.ico")) 
+				if (file_exists(ICONS_DIR . "/$id.ico"))
 					return ICONS_URL . "/$id.ico";
 			}
 			break;
@@ -3121,7 +3247,6 @@
 
 		$params["theme"] = get_user_theme($link);
 		$params["theme_options"] = get_user_theme_options($link);
-		$params["daemon_enabled"] = ENABLE_UPDATE_DAEMON;
 
 		$params["sign_progress"] = theme_image($link, "images/indicator_white.gif");
 		$params["sign_progress_tiny"] = theme_image($link, "images/indicator_tiny.gif");
@@ -3178,7 +3303,7 @@
 		$data['last_article_id'] = getLastArticleId($link);
 		$data['cdm_expanded'] = get_pref($link, 'CDM_EXPANDED');
 
-		if (ENABLE_UPDATE_DAEMON) {
+		if (file_exists(LOCK_DIRECTORY . "/update_daemon.lock")) {
 
 			$data['daemon_is_running'] = (int) file_is_locked("update_daemon.lock");
 
@@ -3216,54 +3341,59 @@
 		return $data;
 	}
 
-	function getSearchSql($search, $match_on) {
+	function search_to_sql($link, $search, $match_on) {
 
 		$search_query_part = "";
 
 		$keywords = split(" ", $search);
 		$query_keywords = array();
 
-		if ($match_on == "both") {
+		foreach ($keywords as $k) {
+			if (strpos($k, "-") === 0) {
+				$k = substr($k, 1);
+				$not = "NOT";
+			} else {
+				$not = "";
+			}
 
-			foreach ($keywords as $k) {
-				if (strpos($k, "-") === 0) {
-					$k = substr($k, 1);
-					$not = "NOT";
-				} else {
-					$not = "";
-				}
+			$commandpair = split(":", mb_strtolower($k), 2);
 
+			if ($commandpair[0] == "note" && $commandpair[1]) {
+
+				if ($commandpair[1] == "true")
+					array_push($query_keywords, "($not (note IS NOT NULL AND note != ''))");
+				else
+					array_push($query_keywords, "($not (note IS NULL OR note = ''))");
+
+			} else if ($commandpair[0] == "star" && $commandpair[1]) {
+
+				if ($commandpair[1] == "true")
+					array_push($query_keywords, "($not (marked = true))");
+				else
+					array_push($query_keywords, "($not (marked = false))");
+
+			} else if ($commandpair[0] == "pub" && $commandpair[1]) {
+
+				if ($commandpair[1] == "true")
+					array_push($query_keywords, "($not (published = true))");
+				else
+					array_push($query_keywords, "($not (published = false))");
+
+			} else if (strpos($k, "@") === 0) {
+
+				$user_tz_string = get_pref($link, 'USER_TIMEZONE', $_SESSION['uid']);
+				$orig_ts = strtotime(substr($k, 1));
+				$k = date("Y-m-d", convert_timestamp($orig_ts, $user_tz_string, 'UTC'));
+
+				//$k = date("Y-m-d", strtotime(substr($k, 1)));
+
+				array_push($query_keywords, "(".SUBSTRING_FOR_DATE."(updated,1,LENGTH('$k')) $not = '$k')");
+			} else if ($match_on == "both") {
 				array_push($query_keywords, "(UPPER(ttrss_entries.title) $not LIKE UPPER('%$k%')
-					OR UPPER(ttrss_entries.content) $not LIKE UPPER('%$k%'))");
-			}
-
-			$search_query_part = implode("AND", $query_keywords) . " AND ";
-
-		} else if ($match_on == "title") {
-
-			foreach ($keywords as $k) {
-				if (strpos($k, "-") === 0) {
-					$k = substr($k, 1);
-					$not = "NOT";
-				} else {
-					$not = "";
-				}
-
+						OR UPPER(ttrss_entries.content) $not LIKE UPPER('%$k%'))");
+			} else if ($match_on == "title") {
 				array_push($query_keywords, "(UPPER(ttrss_entries.title) $not LIKE UPPER('%$k%'))");
-			}
-
-			$search_query_part = implode("AND", $query_keywords) . " AND ";
-
-		} else if ($match_on == "content") {
-
-			foreach ($keywords as $k) {
-				if (strpos($k, "-") === 0) {
-					$k = substr($k, 1);
-					$not = "NOT";
-				} else {
-					$not = "";
-				}
-
+			} else if ($match_on == "content") {
 				array_push($query_keywords, "(UPPER(ttrss_entries.content) $not LIKE UPPER('%$k%'))");
 			}
 		}
@@ -3273,7 +3403,7 @@
 		return $search_query_part;
 	}
 
-	function queryFeedHeadlines($link, $feed, $limit, $view_mode, $cat_view, $search, $search_mode, $match_on, $override_order = false, $offset = 0, $owner_uid = 0) {
+	function queryFeedHeadlines($link, $feed, $limit, $view_mode, $cat_view, $search, $search_mode, $match_on, $override_order = false, $offset = 0, $owner_uid = 0, $filter = false) {
 
 		if (!$owner_uid) $owner_uid = $_SESSION["uid"];
 
@@ -3284,22 +3414,28 @@
 				if (SPHINX_ENABLED) {
 					$ids = join(",", @sphinx_search($search, 0, 500));
 
-					if ($ids) 
+					if ($ids)
 						$search_query_part = "ref_id IN ($ids) AND ";
 					else
 						$search_query_part = "ref_id = -1 AND ";
 
 				} else {
-					$search_query_part = getSearchSql($search, $match_on);
+					$search_query_part = search_to_sql($link, $search, $match_on);
 					$search_query_part .= " AND ";
-				}				
+				}
 
 			} else {
 				$search_query_part = "";
 			}
 
+			if ($filter) {
+				$filter_query_part = filter_to_sql($filter);
+			} else {
+				$filter_query_part = "";
+			}
+
 			$view_query_part = "";
-	
+
 			if ($view_mode == "adaptive" || $view_query_part == "noscores") {
 				if ($search) {
 					$view_query_part = " ";
@@ -3310,7 +3446,7 @@
 					}
 				}
 			}
-	
+
 			if ($view_mode == "marked") {
 				$view_query_part = " marked = true AND ";
 			}
@@ -3329,50 +3465,50 @@
 
 			if ($limit > 0) {
 				$limit_query_part = "LIMIT " . $limit;
-			} 
+			}
 
 			$vfeed_query_part = "";
-	
+
 			// override query strategy and enable feed display when searching globally
 			if ($search && $search_mode == "all_feeds") {
 				$query_strategy_part = "ttrss_entries.id > 0";
-				$vfeed_query_part = "ttrss_feeds.title AS feed_title,";		
+				$vfeed_query_part = "ttrss_feeds.title AS feed_title,";
 			/* tags */
 			} else if (preg_match("/^-?[0-9][0-9]*$/", $feed) == false) {
 				$query_strategy_part = "ttrss_entries.id > 0";
 				$vfeed_query_part = "(SELECT title FROM ttrss_feeds WHERE
 					id = feed_id) as feed_title,";
 			} else if ($feed > 0 && $search && $search_mode == "this_cat") {
-	
-				$vfeed_query_part = "ttrss_feeds.title AS feed_title,";		
+
+				$vfeed_query_part = "ttrss_feeds.title AS feed_title,";
 
 				$tmp_result = false;
 
 				if ($cat_view) {
-					$tmp_result = db_query($link, "SELECT id 
+					$tmp_result = db_query($link, "SELECT id
 						FROM ttrss_feeds WHERE cat_id = '$feed'");
 				} else {
 					$tmp_result = db_query($link, "SELECT id
-						FROM ttrss_feeds WHERE cat_id = (SELECT cat_id FROM ttrss_feeds 
+						FROM ttrss_feeds WHERE cat_id = (SELECT cat_id FROM ttrss_feeds
 							WHERE id = '$feed') AND id != '$feed'");
 				}
-	
+
 				$cat_siblings = array();
-	
+
 				if (db_num_rows($tmp_result) > 0) {
 					while ($p = db_fetch_assoc($tmp_result)) {
 						array_push($cat_siblings, "feed_id = " . $p["id"]);
 					}
-	
-					$query_strategy_part = sprintf("(feed_id = %d OR %s)", 
+
+					$query_strategy_part = sprintf("(feed_id = %d OR %s)",
 						$feed, implode(" OR ", $cat_siblings));
-	
+
 				} else {
 					$query_strategy_part = "ttrss_entries.id > 0";
 				}
-				
+
 			} else if ($feed > 0) {
-	
+
 				if ($cat_view) {
 
 					if ($feed > 0) {
@@ -3380,10 +3516,10 @@
 					} else {
 						$query_strategy_part = "cat_id IS NULL";
 					}
-	
+
 					$vfeed_query_part = "ttrss_feeds.title AS feed_title,";
 
-				} else {		
+				} else {
 					$query_strategy_part = "feed_id = '$feed'";
 				}
 			} else if ($feed == 0 && !$cat_view) { // archive virtual feed
@@ -3403,7 +3539,7 @@
 					$vfeed_query_part = "ttrss_feeds.title AS feed_title,";
 
 					$ext_tables_part = ",ttrss_labels2,ttrss_user_labels2";
-	
+
 					$query_strategy_part = "ttrss_labels2.id = ttrss_user_labels2.label_id AND
 						ttrss_user_labels2.article_id = ref_id";
 
@@ -3415,7 +3551,7 @@
 				$intl = get_pref($link, "FRESH_ARTICLE_MAX_AGE", $owner_uid);
 
 				if (DB_TYPE == "pgsql") {
-					$query_strategy_part .= " AND updated > NOW() - INTERVAL '$intl hour' "; 
+					$query_strategy_part .= " AND updated > NOW() - INTERVAL '$intl hour' ";
 				} else {
 					$query_strategy_part .= " AND updated > DATE_SUB(NOW(), INTERVAL $intl HOUR) ";
 				}
@@ -3433,7 +3569,7 @@
 
 				$vfeed_query_part = "ttrss_feeds.title AS feed_title,";
 				$ext_tables_part = ",ttrss_labels2,ttrss_user_labels2";
- 
+
 			} else {
 				$query_strategy_part = "id > 0"; // dumb
 			}
@@ -3446,7 +3582,7 @@
 
 			if (get_pref($link, 'REVERSE_HEADLINES', $owner_uid)) {
 				$order_by = "$date_sort_field";
-			} else {	
+			} else {
 				$order_by = "$date_sort_field DESC";
 			}
 
@@ -3457,7 +3593,7 @@
 			if ($override_order) {
 				$order_by = $override_order;
 			}
-	
+
 			$feed_title = "";
 
 			if ($search) {
@@ -3467,35 +3603,35 @@
 					$feed_title = getCategoryTitle($link, $feed);
 				} else {
 					if ((int)$feed == $feed && $feed > 0) {
-						$result = db_query($link, "SELECT title,site_url,last_error 
+						$result = db_query($link, "SELECT title,site_url,last_error
 							FROM ttrss_feeds WHERE id = '$feed' AND owner_uid = $owner_uid");
-		
+
 						$feed_title = db_fetch_result($result, 0, "title");
 						$feed_site_url = db_fetch_result($result, 0, "site_url");
 						$last_error = db_fetch_result($result, 0, "last_error");
 					} else {
 						$feed_title = getFeedTitle($link, $feed);
-					} 
+					}
 				}
 			}
 
 			$content_query_part = "content as content_preview,";
 
 			if (preg_match("/^-?[0-9][0-9]*$/", $feed) != false) {
-	
+
 				if ($feed >= 0) {
 					$feed_kind = "Feeds";
 				} else {
 					$feed_kind = "Labels";
 				}
-	
+
 				if ($limit_query_part) {
 					$offset_query_part = "OFFSET $offset";
 				}
 
 				if ($vfeed_query_part && get_pref($link, 'VFEED_GROUP_BY_FEED', $owner_uid)) {
 					if (!$override_order) {
-						$order_by = "ttrss_feeds.title, $order_by";	
+						$order_by = "ttrss_feeds.title, $order_by";
 					}
 				}
 
@@ -3508,7 +3644,7 @@
 						LEFT JOIN ttrss_feeds ON (feed_id = ttrss_feeds.id)";
 				}
 
-				$query = "SELECT DISTINCT 
+				$query = "SELECT DISTINCT
 						date_entered,
 						guid,
 						ttrss_entries.id,ttrss_entries.title,
@@ -3527,6 +3663,7 @@
 					ttrss_user_entries.ref_id = ttrss_entries.id AND
 					ttrss_user_entries.owner_uid = '$owner_uid' AND
 					$search_query_part
+					$filter_query_part
 					$view_query_part
 					$query_strategy_part ORDER BY $order_by
 					$limit_query_part $offset_query_part";
@@ -3534,12 +3671,12 @@
 				if ($_REQUEST["debug"]) print $query;
 
 				$result = db_query($link, $query);
-	
+
 			} else {
 				// browsing by tag
-	
+
 				$feed_kind = "Tags";
-	
+
 				$result = db_query($link, "SELECT DISTINCT
 					date_entered,
 					guid,
@@ -3547,7 +3684,7 @@
 					ttrss_entries.id as id,title,
 					updated,
 					unread,feed_id,orig_feed_id,
-					marked,link,last_read,				
+					marked,link,last_read,
 					".SUBSTRING_FOR_DATE."(last_read,1,19) as last_read_noms,
 					$vfeed_query_part
 					$content_query_part
@@ -3556,23 +3693,26 @@
 					FROM
 						ttrss_entries,ttrss_user_entries,ttrss_tags
 					WHERE
-						ref_id = ttrss_entries.id AND 
+						ref_id = ttrss_entries.id AND
 						ttrss_user_entries.owner_uid = '$owner_uid' AND
 						post_int_id = int_id AND tag_name = '$feed' AND
 						$view_query_part
 						$search_query_part
 						$query_strategy_part ORDER BY $order_by
-					$limit_query_part");	
+					$limit_query_part");
 			}
 
 			return array($result, $feed_title, $feed_site_url, $last_error);
-		
+
 	}
 
 	function generate_syndicated_feed($link, $owner_uid, $feed, $is_cat,
 		$limit, $search, $search_mode, $match_on, $view_mode = false) {
 
-		$note_style = 	"float : right; background-color : #fff7d5; border-width : 1px; ".
+		require_once "lib/MiniTemplator.class.php";
+
+		$note_style = 	"background-color : #fff7d5;
+			border-width : 1px; ".
 			"padding : 5px; border-style : dashed; border-color : #e7d796;".
 			"margin-bottom : 1em; color : #9a8c59;";
 
@@ -3584,8 +3724,8 @@
 			$date_sort_field = "date_entered";
 		}
 
-		$qfh_ret = queryFeedHeadlines($link, $feed, 
-			$limit, $view_mode, $is_cat, $search, $search_mode, 
+		$qfh_ret = queryFeedHeadlines($link, $feed,
+			$limit, $view_mode, $is_cat, $search, $search_mode,
 			$match_on, "$date_sort_field DESC", 0, $owner_uid);
 
 		$result = $qfh_ret[0];
@@ -3593,63 +3733,76 @@
 		$feed_site_url = $qfh_ret[2];
 		$last_error = $qfh_ret[3];
 
-//		if (!$feed_site_url) $feed_site_url = "http://localhost/";
+		$feed_self_url = get_self_url_prefix() .
+			"/backend.php?op=rss&id=-2&key=" .
+			get_feed_access_key($link, -2, false);
 
-		print "<?xml version=\"1.0\" encoding=\"utf-8\"?>
-			<?xml-stylesheet type=\"text/xsl\" href=\"rss.xsl\"?>
-			<rss version=\"2.0\">
- 			<channel>
- 			<title>$feed_title</title>
-			<link>$feed_site_url</link>
-			<description>Feed generated by Tiny Tiny RSS</description>";
- 
+		if (!$feed_site_url) $feed_site_url = get_self_url_prefix();
+
+		$tpl = new MiniTemplator;
+
+		$tpl->readTemplateFromFile("templates/generated_feed.txt");
+
+		$tpl->setVariable('FEED_TITLE', $feed_title);
+		$tpl->setVariable('VERSION', VERSION);
+		$tpl->setVariable('FEED_URL', htmlspecialchars($feed_self_url));
+
+		if (PUBSUBHUBBUB_HUB && $feed == -2) {
+			$tpl->setVariable('HUB_URL', htmlspecialchars(PUBSUBHUBBUB_HUB));
+			$tpl->addBlock('feed_hub');
+		}
+
+		$tpl->setVariable('SELF_URL', htmlspecialchars(get_self_url_prefix()));
+
  		while ($line = db_fetch_assoc($result)) {
- 			print "<item>";
- 			print "<guid>" . htmlspecialchars($line["guid"]) . "</guid>";
- 			print "<link>" . htmlspecialchars($line["link"]) . "</link>";
+			$tpl->setVariable('ARTICLE_ID', htmlspecialchars($line['link']));
+			$tpl->setVariable('ARTICLE_LINK', htmlspecialchars($line['link']));
+			$tpl->setVariable('ARTICLE_TITLE', htmlspecialchars($line['title']));
+			$tpl->setVariable('ARTICLE_EXCERPT',
+				truncate_string(strip_tags($line["content_preview"]), 100, '...'));
+
+			$content = sanitize_rss($link, $line["content_preview"], false, $owner_uid);
+
+			if ($line['note']) {
+				$content = "<div style=\"$note_style\">Article note: " . $line['note'] . "</div>" .
+					$content;
+			}
+
+			$tpl->setVariable('ARTICLE_CONTENT', $content);
+
+			$tpl->setVariable('ARTICLE_UPDATED', date('c', strtotime($line["updated"])));
+			$tpl->setVariable('ARTICLE_AUTHOR', htmlspecialchars($line['author']));
 
 			$tags = get_article_tags($link, $line["id"], $owner_uid);
 
 			foreach ($tags as $tag) {
-				print "<category>" . htmlspecialchars($tag) . "</category>";
+				$tpl->setVariable('ARTICLE_CATEGORY', htmlspecialchars($tag));
+				$tpl->addBlock('category');
 			}
 
- 			$rfc822_date = date('r', strtotime($line["updated"]));
-  
-			print "<pubDate>$rfc822_date</pubDate>";
-
-			if ($line["author"]) {
-				print "<author>" . htmlspecialchars($line["author"]) . "</author>";
-			}
- 
- 			print "<title><![CDATA[" . 
- 				htmlspecialchars($line["title"]) . "]]></title>";
-  
-			print "<description><![CDATA[";
-
-			if ($line["note"]) {
-				print "<div style='$note_style'>";
-				print $line["note"];
-				print "</div>";
-			}
-
-			print sanitize_rss($link, $line["content_preview"], false, $owner_uid);
-			print "]]></description>";
-	
 			$enclosures = get_article_enclosures($link, $line["id"]);
 
 			foreach ($enclosures as $e) {
 				$type = htmlspecialchars($e['content_type']);
 				$url = htmlspecialchars($e['content_url']);
 				$length = $e['duration'];
-				print "<enclosure url=\"$url\" type=\"$type\" length=\"$length\"/>";
+
+				$tpl->setVariable('ARTICLE_ENCLOSURE_URL', $url);
+				$tpl->setVariable('ARTICLE_ENCLOSURE_TYPE', $type);
+				$tpl->setVariable('ARTICLE_ENCLOSURE_LENGTH', $length);
+
+				$tpl->addBlock('enclosure');
 			}
 
- 			print "</item>";
-  		}
-  
- 		print "</channel></rss>";
+			$tpl->addBlock('entry');
+		}
 
+		$tmp = "";
+
+		$tpl->addBlock('feed');
+		$tpl->generateOutputToString($tmp);
+
+		print $tmp;
 	}
 
 	function getCategoryTitle($link, $cat_id) {
@@ -3678,9 +3831,9 @@
 
 		$res = trim($str); if (!$res) return '';
 
-		if (get_pref($link, "STRIP_UNSAFE_TAGS", $owner) || $force_strip_tags) {
-			$res = $purifier->purify($res);
-		}
+//		if (get_pref($link, "STRIP_UNSAFE_TAGS", $owner) || $force_strip_tags) {
+		$res = $purifier->purify($res);
+//		}
 
 		if (get_pref($link, "STRIP_IMAGES", $owner)) {
 			$res = preg_replace('/<img[^>]+>/is', '', $res);
@@ -3700,7 +3853,7 @@
 		$doc = new DOMDocument();
 		$doc->loadHTML($charset_hack . $res);
 		$xpath = new DOMXPath($doc);
-	
+
 		$entries = $xpath->query('(//a[@href]|//img[@src])');
 		$br_inserted = 0;
 
@@ -3711,9 +3864,9 @@
 				if ($entry->hasAttribute('href'))
 					$entry->setAttribute('href',
 						rewrite_relative_url($site_url, $entry->getAttribute('href')));
-		
+
 				if ($entry->hasAttribute('src'))
-					if (preg_match('/^image.php\?i=[a-z0-9]+$/', $entry->getAttribute('src')) == 0) 
+					if (preg_match('/^image.php\?i=[a-z0-9]+$/', $entry->getAttribute('src')) == 0)
 						$entry->setAttribute('src',
 							rewrite_relative_url($site_url, $entry->getAttribute('src')));
 			}
@@ -3732,15 +3885,15 @@
 
 			}
 		}
-	
+
 		$node = $doc->getElementsByTagName('body')->item(0);
 
-		return $doc->saveXML($node); 
+		return $doc->saveXML($node);
 	}
 
 	/**
 	 * Send by mail a digest of last articles.
-	 * 
+	 *
 	 * @param mixed $link The database connection.
 	 * @param integer $limit The maximum number of articles by digest.
 	 * @return boolean Return false if digests are not enabled.
@@ -3760,7 +3913,7 @@
 			$interval_query = "last_digest_sent < DATE_SUB(NOW(), INTERVAL $days DAY)";
 		}
 
-		$result = db_query($link, "SELECT id,email FROM ttrss_users 
+		$result = db_query($link, "SELECT id,email FROM ttrss_users
 				WHERE email != '' AND (last_digest_sent IS NULL OR $interval_query)");
 
 		while ($line = db_fetch_assoc($result)) {
@@ -3816,7 +3969,7 @@
 					print "No headlines\n";
 				}
 
-				db_query($link, "UPDATE ttrss_users SET last_digest_sent = NOW() 
+				db_query($link, "UPDATE ttrss_users SET last_digest_sent = NOW()
 					WHERE id = " . $line["id"]);
 			}
 		}
@@ -3856,14 +4009,14 @@
 				link,
 				SUBSTRING(content, 1, 120) AS excerpt,
 				".SUBSTRING_FOR_DATE."(last_updated,1,19) AS last_updated
-			FROM 
-				ttrss_user_entries,ttrss_entries,ttrss_feeds 
-			WHERE 
-				ref_id = ttrss_entries.id AND feed_id = ttrss_feeds.id 
+			FROM
+				ttrss_user_entries,ttrss_entries,ttrss_feeds
+			WHERE
+				ref_id = ttrss_entries.id AND feed_id = ttrss_feeds.id
 				AND include_in_digest = true
 				AND $interval_query
 				AND ttrss_user_entries.owner_uid = $user_id
-				AND unread = true 
+				AND unread = true
 			ORDER BY ttrss_feeds.title, date_updated DESC
 			LIMIT $limit");
 
@@ -3877,7 +4030,7 @@
 			array_push($headlines, $line);
 		}
 
-		for ($i = 0; $i < sizeof($headlines); $i++) {	
+		for ($i = 0; $i < sizeof($headlines); $i++) {
 
 			$line = $headlines[$i];
 
@@ -3890,7 +4043,7 @@
 			$tpl->setVariable('ARTICLE_TITLE', $line["title"]);
 			$tpl->setVariable('ARTICLE_LINK', $line["link"]);
 			$tpl->setVariable('ARTICLE_UPDATED', $updated);
-			$tpl->setVariable('ARTICLE_EXCERPT', 
+			$tpl->setVariable('ARTICLE_EXCERPT',
 				truncate_string(strip_tags($line["excerpt"]), 100));
 
 			$tpl->addBlock('article');
@@ -3899,7 +4052,7 @@
 			$tpl_t->setVariable('ARTICLE_TITLE', $line["title"]);
 			$tpl_t->setVariable('ARTICLE_LINK', $line["link"]);
 			$tpl_t->setVariable('ARTICLE_UPDATED', $updated);
-//			$tpl_t->setVariable('ARTICLE_EXCERPT', 
+//			$tpl_t->setVariable('ARTICLE_EXCERPT',
 //				truncate_string(strip_tags($line["excerpt"]), 100));
 
 			$tpl_t->addBlock('article');
@@ -3928,7 +4081,7 @@
 
 			if ($version_data) {
 				$version_data = json_decode($version_data, true);
-				if ($version_data && $version_data['version']) {	
+				if ($version_data && $version_data['version']) {
 
 					if (version_compare(VERSION, $version_data['version']) == -1) {
 						return $version_data;
@@ -3950,15 +4103,15 @@
 		$ids_qpart = join(" OR ", $tmp_ids);
 
 		if ($cmode == 0) {
-			db_query($link, "UPDATE ttrss_user_entries SET 
+			db_query($link, "UPDATE ttrss_user_entries SET
 			marked = false,last_read = NOW()
 			WHERE ($ids_qpart) AND owner_uid = " . $_SESSION["uid"]);
 		} else if ($cmode == 1) {
-			db_query($link, "UPDATE ttrss_user_entries SET 
+			db_query($link, "UPDATE ttrss_user_entries SET
 			marked = true
 			WHERE ($ids_qpart) AND owner_uid = " . $_SESSION["uid"]);
 		} else {
-			db_query($link, "UPDATE ttrss_user_entries SET 
+			db_query($link, "UPDATE ttrss_user_entries SET
 			marked = NOT marked,last_read = NOW()
 			WHERE ($ids_qpart) AND owner_uid = " . $_SESSION["uid"]);
 		}
@@ -3975,17 +4128,27 @@
 		$ids_qpart = join(" OR ", $tmp_ids);
 
 		if ($cmode == 0) {
-			db_query($link, "UPDATE ttrss_user_entries SET 
+			db_query($link, "UPDATE ttrss_user_entries SET
 			published = false,last_read = NOW()
 			WHERE ($ids_qpart) AND owner_uid = " . $_SESSION["uid"]);
 		} else if ($cmode == 1) {
-			db_query($link, "UPDATE ttrss_user_entries SET 
+			db_query($link, "UPDATE ttrss_user_entries SET
 			published = true
 			WHERE ($ids_qpart) AND owner_uid = " . $_SESSION["uid"]);
 		} else {
-			db_query($link, "UPDATE ttrss_user_entries SET 
+			db_query($link, "UPDATE ttrss_user_entries SET
 			published = NOT published,last_read = NOW()
 			WHERE ($ids_qpart) AND owner_uid = " . $_SESSION["uid"]);
+		}
+
+		if (PUBSUBHUBBUB_HUB) {
+			$rss_link = get_self_url_prefix() .
+				"/backend.php?op=rss&id=-2&key=" .
+				get_feed_access_key($link, -2, false);
+
+			$p = new Publisher(PUBSUBHUBBUB_HUB);
+
+			$pubsub_result = $p->publish_update($rss_link);
 		}
 	}
 
@@ -4003,15 +4166,15 @@
 		$ids_qpart = join(" OR ", $tmp_ids);
 
 		if ($cmode == 0) {
-			db_query($link, "UPDATE ttrss_user_entries SET 
+			db_query($link, "UPDATE ttrss_user_entries SET
 			unread = false,last_read = NOW()
 			WHERE ($ids_qpart) AND owner_uid = $owner_uid");
 		} else if ($cmode == 1) {
-			db_query($link, "UPDATE ttrss_user_entries SET 
+			db_query($link, "UPDATE ttrss_user_entries SET
 			unread = true
 			WHERE ($ids_qpart) AND owner_uid = $owner_uid");
 		} else {
-			db_query($link, "UPDATE ttrss_user_entries SET 
+			db_query($link, "UPDATE ttrss_user_entries SET
 			unread = NOT unread,last_read = NOW()
 			WHERE ($ids_qpart) AND owner_uid = $owner_uid");
 		}
@@ -4029,15 +4192,15 @@
 	function catchupArticleById($link, $id, $cmode) {
 
 		if ($cmode == 0) {
-			db_query($link, "UPDATE ttrss_user_entries SET 
+			db_query($link, "UPDATE ttrss_user_entries SET
 			unread = false,last_read = NOW()
 			WHERE ref_id = '$id' AND owner_uid = " . $_SESSION["uid"]);
 		} else if ($cmode == 1) {
-			db_query($link, "UPDATE ttrss_user_entries SET 
+			db_query($link, "UPDATE ttrss_user_entries SET
 			unread = true
 			WHERE ref_id = '$id' AND owner_uid = " . $_SESSION["uid"]);
 		} else {
-			db_query($link, "UPDATE ttrss_user_entries SET 
+			db_query($link, "UPDATE ttrss_user_entries SET
 			unread = NOT unread,last_read = NOW()
 			WHERE ref_id = '$id' AND owner_uid = " . $_SESSION["uid"]);
 		}
@@ -4047,138 +4210,136 @@
 	}
 
 	function make_guid_from_title($title) {
-		return preg_replace("/[ \"\',.:;]/", "-", 
+		return preg_replace("/[ \"\',.:;]/", "-",
 			mb_strtolower(strip_tags($title), 'utf-8'));
 	}
 
-	function print_headline_subtoolbar($link, $feed_site_url, $feed_title, 
+	function format_headline_subtoolbar($link, $feed_site_url, $feed_title,
 			$feed_id, $is_cat, $search, $match_on,
 			$search_mode, $view_mode, $error) {
 
-			$page_prev_link = "viewFeedGoPage(-1)";
-			$page_next_link = "viewFeedGoPage(1)";
-			$page_first_link = "viewFeedGoPage(0)";
+		$page_prev_link = "viewFeedGoPage(-1)";
+		$page_next_link = "viewFeedGoPage(1)";
+		$page_first_link = "viewFeedGoPage(0)";
 
-			$catchup_page_link = "catchupPage()";
-			$catchup_feed_link = "catchupCurrentFeed()";
-			$catchup_sel_link = "catchupSelection()";
+		$catchup_page_link = "catchupPage()";
+		$catchup_feed_link = "catchupCurrentFeed()";
+		$catchup_sel_link = "catchupSelection()";
 
-			$archive_sel_link = "archiveSelection()";
-			$delete_sel_link = "deleteSelection()";
+		$archive_sel_link = "archiveSelection()";
+		$delete_sel_link = "deleteSelection()";
 
-			$sel_all_link = "selectArticles('all')";
-			$sel_unread_link = "selectArticles('unread')";
-			$sel_none_link = "selectArticles('none')";
-			$sel_inv_link = "selectArticles('invert')";
+		$sel_all_link = "selectArticles('all')";
+		$sel_unread_link = "selectArticles('unread')";
+		$sel_none_link = "selectArticles('none')";
+		$sel_inv_link = "selectArticles('invert')";
 
-			$tog_unread_link = "selectionToggleUnread()";
-			$tog_marked_link = "selectionToggleMarked()";
-			$tog_published_link = "selectionTogglePublished()";
+		$tog_unread_link = "selectionToggleUnread()";
+		$tog_marked_link = "selectionToggleMarked()";
+		$tog_published_link = "selectionTogglePublished()";
 
-			print "<div id=\"subtoolbar_main\">";
+		$reply = "<div id=\"subtoolbar_main\">";
 
-			print __('Select:')."
-				<a href=\"#\" onclick=\"$sel_all_link\">".__('All')."</a>,
-				<a href=\"#\" onclick=\"$sel_unread_link\">".__('Unread')."</a>,
-				<a href=\"#\" onclick=\"$sel_inv_link\">".__('Invert')."</a>,
-				<a href=\"#\" onclick=\"$sel_none_link\">".__('None')."</a></li>";
+		$reply .= __('Select:')."
+			<a href=\"#\" onclick=\"$sel_all_link\">".__('All')."</a>,
+			<a href=\"#\" onclick=\"$sel_unread_link\">".__('Unread')."</a>,
+			<a href=\"#\" onclick=\"$sel_inv_link\">".__('Invert')."</a>,
+			<a href=\"#\" onclick=\"$sel_none_link\">".__('None')."</a></li>";
 
-			print " ";
+		$reply .= " ";
 
-			print "<select dojoType=\"dijit.form.Select\" 
-				onchange=\"headlineActionsChange(this)\">";
-			print "<option value=\"false\">".__('Actions...')."</option>";
+		$reply .= "<select dojoType=\"dijit.form.Select\"
+			onchange=\"headlineActionsChange(this)\">";
+		$reply .= "<option value=\"false\">".__('Actions...')."</option>";
 
-			print "<option value=\"0\" disabled=\"1\">".__('Selection toggle:')."</option>";
+		$reply .= "<option value=\"0\" disabled=\"1\">".__('Selection toggle:')."</option>";
 
-			print "<option value=\"$tog_unread_link\">".__('Unread')."</option>
-				<option value=\"$tog_marked_link\">".__('Starred')."</option>
-				<option value=\"$tog_published_link\">".__('Published')."</option>";
+		$reply .= "<option value=\"$tog_unread_link\">".__('Unread')."</option>
+			<option value=\"$tog_marked_link\">".__('Starred')."</option>
+			<option value=\"$tog_published_link\">".__('Published')."</option>";
 
-			print "<option value=\"0\" disabled=\"1\">".__('Selection:')."</option>";
+		$reply .= "<option value=\"0\" disabled=\"1\">".__('Selection:')."</option>";
 
-			print "<option value=\"$catchup_sel_link\">".__('Mark as read')."</option>";
+		$reply .= "<option value=\"$catchup_sel_link\">".__('Mark as read')."</option>";
 
-			if ($feed_id != "0") {
-				print "<option value=\"$archive_sel_link\">".__('Archive')."</option>";
-			} else {
-				print "<option value=\"$archive_sel_link\">".__('Move back')."</option>";
-				print "<option value=\"$delete_sel_link\">".__('Delete')."</option>";
-
-			} 
-
-			print "<option value=\"emailArticle(false)\">".__('Forward by email').
-				"</option>";
-
-			$rss_link = htmlspecialchars(get_self_url_prefix() . 
-				"/backend.php?op=rss&id=$feed_id&is_cat=$is_cat&view_mode=$view_mode$search_q");
-
-			print "<option value=\"0\" disabled=\"1\">".__('Feed:')."</option>";
-
-			print "<option value=\"displayDlg('generatedFeed', '$feed_id:$is_cat:$rss_link')\">".__('View as RSS')."</option>";
-
-			print "</select>";			
-
-			print "</div>";
-
-			print "<div id=\"subtoolbar_ftitle\">";
-
-			if ($feed_site_url) {
-				$target = "target=\"_blank\"";
-				print "<a title=\"".__("Visit the website")."\" $target href=\"$feed_site_url\">".
-					truncate_string($feed_title,30)."</a>";
-
-				if ($error) {
-					print " (<span class=\"error\" title=\"$error\">Error</span>)";
-				}
-
-			} else {
-				if ($feed_id < -10) {
-					$label_id = -11-$feed_id;
-
-					$result = db_query($link, "SELECT fg_color, bg_color
-						FROM ttrss_labels2 WHERE id = '$label_id' AND owner_uid = " .
-						$_SESSION["uid"]);
-
-					if (db_num_rows($result) != 0) {
-						$fg_color = db_fetch_result($result, 0, "fg_color");
-						$bg_color = db_fetch_result($result, 0, "bg_color");
-
-						print "<span style='background : $bg_color; color : $fg_color'>";
-						print $feed_title;
-						print "</span>";
-					} else {
-						print $feed_title;
-					}
-
-				} else {
-					print $feed_title;
-				}
-			}
-
-			if ($search) {
-				$search_q = "&q=$search&m=$match_on&smode=$search_mode";
-			} else {
-				$search_q = "";
-			}
-
-			// Adaptive doesn't really make any sense for generated feeds
-			// All Articles is the default, so no need to insert it either
-			if ($view_mode == "adaptive" || $view_mode == "all_articles") 
-				$view_mode = "";
-			else
-				$view_mode = "&view-mode=$view_mode";
-
-			print "
-				<a href=\"#\"
-					title=\"".__("View as RSS feed")."\"
-					onclick=\"displayDlg('generatedFeed', '$feed_id:$is_cat:$rss_link')\">
-					<img class=\"noborder\" style=\"vertical-align : middle\" src=\"images/feed-icon-12x12.png\"></a>";
-
-			print "</div>";
+		if ($feed_id != "0") {
+			$reply .= "<option value=\"$archive_sel_link\">".__('Archive')."</option>";
+		} else {
+			$reply .= "<option value=\"$archive_sel_link\">".__('Move back')."</option>";
+			$reply .= "<option value=\"$delete_sel_link\">".__('Delete')."</option>";
 
 		}
-	
+
+		$reply .= "<option value=\"emailArticle(false)\">".__('Forward by email').
+			"</option>";
+
+		if ($is_cat) $cat_q = "&is_cat=$is_cat";
+
+		$rss_link = htmlspecialchars(get_self_url_prefix() .
+			"/backend.php?op=rss&id=$feed_id$cat_q$search_q");
+
+		$reply .= "<option value=\"0\" disabled=\"1\">".__('Feed:')."</option>";
+
+		$reply .= "<option value=\"catchupPage()\">".__('Mark as read')."</option>";
+
+		$reply .= "<option value=\"displayDlg('generatedFeed', '$feed_id:$is_cat:$rss_link')\">".__('View as RSS')."</option>";
+
+		$reply .= "</select>";
+
+		$reply .= "</div>";
+
+		$reply .= "<div id=\"subtoolbar_ftitle\">";
+
+		if ($feed_site_url) {
+			$target = "target=\"_blank\"";
+			$reply .= "<a title=\"".__("Visit the website")."\" $target href=\"$feed_site_url\">".
+				truncate_string($feed_title,30)."</a>";
+
+			if ($error) {
+				$reply .= " (<span class=\"error\" title=\"$error\">Error</span>)";
+			}
+
+		} else {
+			if ($feed_id < -10) {
+				$label_id = -11-$feed_id;
+
+				$result = db_query($link, "SELECT fg_color, bg_color
+					FROM ttrss_labels2 WHERE id = '$label_id' AND owner_uid = " .
+					$_SESSION["uid"]);
+
+				if (db_num_rows($result) != 0) {
+					$fg_color = db_fetch_result($result, 0, "fg_color");
+					$bg_color = db_fetch_result($result, 0, "bg_color");
+
+					$reply .= "<span style='background : $bg_color; color : $fg_color'>";
+					$reply .= $feed_title;
+					$reply .= "</span>";
+				} else {
+					$reply .= $feed_title;
+				}
+
+			} else {
+				$reply .= $feed_title;
+			}
+		}
+
+		if ($search) {
+			$search_q = "&q=$search&m=$match_on&smode=$search_mode";
+		} else {
+			$search_q = "";
+		}
+
+		$reply .= "
+			<a href=\"#\"
+				title=\"".__("View as RSS feed")."\"
+				onclick=\"displayDlg('generatedFeed', '$feed_id:$is_cat:$rss_link')\">
+				<img class=\"noborder\" style=\"vertical-align : middle\" src=\"images/feed-icon-12x12.png\"></a>";
+
+		$reply .= "</div>";
+
+		return $reply;
+	}
+
 	function outputFeedList($link, $special = true) {
 
 		$feedlist = array();
@@ -4201,17 +4362,17 @@
 			} else {
 				$cat['items'] = array();
 			}
-	
+
 			foreach (array(-4, -3, -1, -2, 0) as $i) {
 				array_push($cat['items'], feedlist_init_feed($link, $i));
 			}
-	
+
 			if ($enable_cats) {
 				array_push($feedlist['items'], $cat);
 			} else {
 				$feedlist['items'] = array_merge($feedlist['items'], $cat['items']);
 			}
-	
+
 			$result = db_query($link, "SELECT * FROM
 				ttrss_labels2 WHERE owner_uid = '$owner_uid' ORDER by caption");
 
@@ -4225,18 +4386,18 @@
 				}
 
 				while ($line = db_fetch_assoc($result)) {
-		
+
 					$label_id = -$line['id'] - 11;
 					$count = getFeedUnread($link, $label_id);
-	
+
 					$feed = feedlist_init_feed($link, $label_id, false, $count);
-	
+
 					$feed['fg_color'] = $line['fg_color'];
 					$feed['bg_color'] = $line['bg_color'];
-	
+
 					array_push($cat['items'], $feed);
 				}
-		
+
 				if ($enable_cats) {
 					array_push($feedlist['items'], $cat);
 				} else {
@@ -4244,7 +4405,7 @@
 				}
 			}
 		}
-	
+
 /*		if (get_pref($link, 'ENABLE_FEED_CATS')) {
 			if (get_pref($link, "FEEDS_SORT_BY_UNREAD")) {
 				$order_by_qpart = "order_id,category,unread DESC,title";
@@ -4254,7 +4415,7 @@
 		} else {
 			if (get_pref($link, "FEEDS_SORT_BY_UNREAD")) {
 				$order_by_qpart = "unread DESC,title";
-			} else {		
+			} else {
 				$order_by_qpart = "title";
 			}
 		} */
@@ -4274,15 +4435,15 @@
 			cat_id,last_error,
 			ttrss_feed_categories.title AS category,
 			ttrss_feed_categories.collapsed,
-			value AS unread	
+			value AS unread
 			FROM ttrss_feeds LEFT JOIN ttrss_feed_categories
-				ON (ttrss_feed_categories.id = cat_id)			
-			LEFT JOIN ttrss_counters_cache 
+				ON (ttrss_feed_categories.id = cat_id)
+			LEFT JOIN ttrss_counters_cache
 				ON
 					(ttrss_feeds.id = feed_id)
-			WHERE 
+			WHERE
 				ttrss_feeds.owner_uid = '$owner_uid'
-			ORDER BY $order_by_qpart"; 
+			ORDER BY $order_by_qpart";
 
 		$result = db_query($link, $query);
 
@@ -4291,50 +4452,50 @@
 		if (db_num_rows($result) > 0) {
 
 			$category = "";
-	
-			if (!$enable_cats) 
+
+			if (!$enable_cats)
 				$cat['items'] = array();
 			else
 				$cat = false;
-	
+
 			while ($line = db_fetch_assoc($result)) {
-			
+
 				$feed = htmlspecialchars(trim($line["title"]));
-	
+
 				if (!$feed) $feed = "[Untitled]";
-	
-				$feed_id = $line["id"];	  
+
+				$feed_id = $line["id"];
 				$unread = $line["unread"];
-	
+
 				$cat_id = $line["cat_id"];
 				$tmp_category = $line["category"];
 				if (!$tmp_category) $tmp_category = __("Uncategorized");
-	
+
 				if ($category != $tmp_category && $enable_cats) {
-		
+
 					$category = $tmp_category;
-	
+
 					$collapsed = sql_bool_to_bool($line["collapsed"]);
-	
+
 					// workaround for NULL category
 					if ($category == __("Uncategorized")) {
 						$collapsed = get_pref($link, "_COLLAPSED_UNCAT");
 					}
-	
+
 					if ($cat) array_push($feedlist['items'], $cat);
-	
+
 					$cat = feedlist_init_cat($link, $cat_id, $collapsed);
 				}
-	
-				$updated = make_local_datetime($link, $line["updated_noms"], false);	
-	
-				array_push($cat['items'], feedlist_init_feed($link, $feed_id, 
+
+				$updated = make_local_datetime($link, $line["updated_noms"], false);
+
+				array_push($cat['items'], feedlist_init_feed($link, $feed_id,
 					$feed, $unread, $line['last_error'], $updated));
 			}
-	
+
 			if ($enable_cats) {
 				array_push($feedlist['items'], $cat);
-			} else { 
+			} else {
 				$feedlist['items'] = array_merge($feedlist['items'], $cat['items']);
 			}
 
@@ -4351,13 +4512,13 @@
 
 		if (!$owner_uid) $owner_uid = $_SESSION["uid"];
 
-		$query = "SELECT DISTINCT tag_name, 
+		$query = "SELECT DISTINCT tag_name,
 			owner_uid as owner FROM
 			ttrss_tags WHERE post_int_id = (SELECT int_id FROM ttrss_user_entries WHERE
 			ref_id = '$a_id' AND owner_uid = '$owner_uid' LIMIT 1) ORDER BY tag_name";
 
 		$obj_id = md5("TAGS:$owner_uid:$id");
-		$tags = array();	
+		$tags = array();
 
 		if ($memcache && $obj = $memcache->get($obj_id)) {
 			$tags = $obj;
@@ -4378,14 +4539,14 @@
 				$tmp_result = db_query($link, $query);
 
 				while ($tmp_line = db_fetch_assoc($tmp_result)) {
-					array_push($tags, $tmp_line["tag_name"]);				
+					array_push($tags, $tmp_line["tag_name"]);
 				}
 
 				/* update the cache */
 
 				$tags_str = db_escape_string(join(",", $tags));
 
-				db_query($link, "UPDATE ttrss_user_entries 
+				db_query($link, "UPDATE ttrss_user_entries
 					SET tag_cache = '$tags_str' WHERE ref_id = '$id'
 					AND owner_uid = " . $_SESSION["uid"]);
 			}
@@ -4398,7 +4559,7 @@
 
 	function trim_value(&$value) {
 		$value = trim($value);
-	}	
+	}
 
 	function trim_array($array) {
 		$tmp = $array;
@@ -4444,19 +4605,19 @@
 
 	function format_warning($msg, $id = "") {
 		global $link;
-		return "<div class=\"warning\" id=\"$id\"> 
+		return "<div class=\"warning\" id=\"$id\">
 			<img src=\"".theme_image($link, "images/sign_excl.png")."\">$msg</div>";
 	}
 
 	function format_notice($msg, $id = "") {
 		global $link;
-		return "<div class=\"notice\" id=\"$id\"> 
+		return "<div class=\"notice\" id=\"$id\">
 			<img src=\"".theme_image($link, "images/sign_info.png")."\">$msg</div>";
 	}
 
 	function format_error($msg, $id = "") {
 		global $link;
-		return "<div class=\"error\" id=\"$id\"> 
+		return "<div class=\"error\" id=\"$id\">
 			<img src=\"".theme_image($link, "images/sign_excl.png")."\">$msg</div>";
 	}
 
@@ -4482,30 +4643,30 @@
 
 		$entry = "";
 
-		if (strpos($ctype, "audio/") === 0) {  
+		if (strpos($ctype, "audio/") === 0) {
 
 			if ($_SESSION["hasAudio"] && (strpos($ctype, "ogg") !== false ||
-				strpos($_SERVER['HTTP_USER_AGENT'], "Chrome") !== false ||  
+				strpos($_SERVER['HTTP_USER_AGENT'], "Chrome") !== false ||
 				strpos($_SERVER['HTTP_USER_AGENT'], "Safari") !== false )) {
 
 				$id = 'AUDIO-' . uniqid();
 
 				$entry .= "<audio id=\"$id\"\">
 					<source src=\"$url\"></source>
-					</audio>";	
+					</audio>";
 
-				$entry .= "<span onclick=\"player(this)\" 
+				$entry .= "<span onclick=\"player(this)\"
 					title=\"".__("Click to play")."\" status=\"0\"
 					class=\"player\" audio-id=\"$id\">".__("Play")."</span>";
 
 			} else {
-                    
-				$entry .= "<object type=\"application/x-shockwave-flash\" 
-					data=\"extras/button/musicplayer.swf?song_url=$url\" 
-					width=\"17\" height=\"17\" style='float : left; margin-right : 5px;'> 
-					<param name=\"movie\" 
-						value=\"extras/button/musicplayer.swf?song_url=$url\" />
-					</object>";  
+
+				$entry .= "<object type=\"application/x-shockwave-flash\"
+					data=\"lib/button/musicplayer.swf?song_url=$url\"
+					width=\"17\" height=\"17\" style='float : left; margin-right : 5px;'>
+					<param name=\"movie\"
+						value=\"lib/button/musicplayer.swf?song_url=$url\" />
+					</object>";
 			}
 		}
 
@@ -4517,8 +4678,12 @@
 		return $entry;
 	}
 
-	function outputArticleXML($link, $id, $feed_id, $mark_as_read = true,
+	function format_article($link, $id, $feed_id, $mark_as_read = true,
 		$zoom_mode = false) {
+
+		$rv = array();
+
+		$rv['id'] = $id;
 
 		/* we can figure out feed_id from article id anyway, why do we
 		 * pass feed_id here? let's ignore the argument :( */
@@ -4528,7 +4693,9 @@
 
 		$feed_id = (int) db_fetch_result($result, 0, "feed_id");
 
-		if (!$zoom_mode) { print "<article id='$id'><![CDATA["; };
+		$rv['feed_id'] = $feed_id;
+
+		//if (!$zoom_mode) { print "<article id='$id'><![CDATA["; };
 
 		$result = db_query($link, "SELECT rtl_content, always_display_enclosures FROM ttrss_feeds
 			WHERE id = '$feed_id' AND owner_uid = " . $_SESSION["uid"]);
@@ -4550,8 +4717,8 @@
 		}
 
 		if ($mark_as_read) {
-			$result = db_query($link, "UPDATE ttrss_user_entries 
-				SET unread = false,last_read = NOW() 
+			$result = db_query($link, "UPDATE ttrss_user_entries
+				SET unread = false,last_read = NOW()
 				WHERE ref_id = '$id' AND owner_uid = " . $_SESSION["uid"]);
 
 			ccache_update($link, $feed_id, $_SESSION["uid"]);
@@ -4593,33 +4760,24 @@
 			} else {
 				if ($line["comments"] && $line["link"] != $line["comments"]) {
 					$entry_comments = "<a target='_blank' href=\"".$line["comments"]."\">comments</a>";
-				}				
+				}
 			}
 
 			if ($zoom_mode) {
 				header("Content-Type: text/html");
-				print "<html><head>
+				$rv['content'] .= "<html><head>
 						<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"/>
 						<title>Tiny Tiny RSS - ".$line["title"]."</title>
 						<link rel=\"stylesheet\" type=\"text/css\" href=\"tt-rss.css\">
 					</head><body>";
 			}
 
-			print "<div id=\"PTITLE-$id\" style=\"display : none\">" . 
+			$rv['content'] .= "<div id=\"PTITLE-$id\" style=\"display : none\">" .
 				truncate_string(strip_tags($line['title']), 15) . "</div>";
 
-			print "<div class=\"postReply\" id=\"POST-$id\">";
+			$rv['content'] .= "<div class=\"postReply\" id=\"POST-$id\">";
 
-			/* print "<div dojoType=\"dijit.Menu\" style=\"display: none;\" 
-				targetNodeIds=\"POSTHDR-$id\">";
-			print "<div onclick=\"postOpenInNewTab(event, $id)\" 
-				dojoType=\"dijit.MenuItem\">".__('View in a new tab')."</div>";
-			print "<div dojoType=\"dijit.MenuSeparator\"></div>";
-			print "<div onclick=\"openArticleInNewWindow($id)\" 
-				dojoType=\"dijit.MenuItem\">".__('Open original article')."</div>";
-			print "</div>"; */
-
-			print "<div onclick=\"return postClicked(event, $id)\"
+			$rv['content'] .= "<div onclick=\"return postClicked(event, $id)\"
 				class=\"postHeader\" id=\"POSTHDR-$id\">";
 
 			$entry_author = $line["author"];
@@ -4628,72 +4786,80 @@
 				$entry_author = __(" - ") . $entry_author;
 			}
 
-			$parsed_updated = make_local_datetime($link, $line["updated"], true, 
+			$parsed_updated = make_local_datetime($link, $line["updated"], true,
 				false, true);
 
-			print "<div class=\"postDate$rtl_class\">$parsed_updated</div>";
+			$rv['content'] .= "<div class=\"postDate$rtl_class\">$parsed_updated</div>";
 
 			if ($line["link"]) {
-				print "<div clear='both'><a target='_blank' 
+				$rv['content'] .= "<div clear='both'><a target='_blank'
 					title=\"".htmlspecialchars($line['title'])."\"
-					href=\"" . 
-					$line["link"] . "\">" . 
-					truncate_string($line["title"], 100) . 
+					href=\"" .
+					$line["link"] . "\">" .
+					truncate_string($line["title"], 100) .
 					"<span class='author'>$entry_author</span></a></div>";
 			} else {
-				print "<div clear='both'>" . $line["title"] . "$entry_author</div>";
+				$rv['content'] .= "<div clear='both'>" . $line["title"] . "$entry_author</div>";
 			}
 
-			$tags_str = format_tags_string(get_article_tags($link, $id), $id);
+			$tags = get_article_tags($link, $id);
+			$tags_str = format_tags_string($tags, $id);
+			$tags_str_full = join(", ", $tags);
+
+			if (!$tags_str_full) $tags_str_full = __("no tags");
 
 			if (!$entry_comments) $entry_comments = "&nbsp;"; # placeholder
 
-			print "<div style='float : right'>
-				<img src='".theme_image($link, 'images/tag.png')."' 
+			$rv['content'] .= "<div style='float : right'>
+				<img src='".theme_image($link, 'images/tag.png')."'
 				class='tagsPic' alt='Tags' title='Tags'>&nbsp;";
 
 			if (!$zoom_mode) {
-				print "<span id=\"ATSTR-$id\">$tags_str</span>
-					<a title=\"".__('Edit tags for this article')."\" 
+				$rv['content'] .= "<span id=\"ATSTR-$id\">$tags_str</span>
+					<a title=\"".__('Edit tags for this article')."\"
 					href=\"#\" onclick=\"editArticleTags($id, $feed_id)\">(+)</a>";
 
-				print "<img src=\"".theme_image($link, 'images/art-zoom.png')."\" 
+				$rv['content'] .= "<div dojoType=\"dijit.Tooltip\"
+					id=\"ATSTRTIP-$id\" connectId=\"ATSTR-$id\"
+					position=\"below\">$tags_str_full</div>";
+
+				$rv['content'] .= "<img src=\"".theme_image($link, 'images/art-zoom.png')."\"
 						class='tagsPic' style=\"cursor : pointer\"
 						onclick=\"postOpenInNewTab(event, $id)\"
 						alt='Zoom' title='".__('Open article in new tab')."'>";
 
 				//$note_escaped = htmlspecialchars($line['note'], ENT_QUOTES);
 
-				print "<img src=\"".theme_image($link, 'images/art-pub-note.png')."\" 
+				$rv['content'] .= "<img src=\"".theme_image($link, 'images/art-pub-note.png')."\"
 						class='tagsPic' style=\"cursor : pointer\"
 						onclick=\"editArticleNote($id)\"
 						alt='PubNote' title='".__('Edit article note')."'>";
 
 				if (DIGEST_ENABLE) {
-					print "<img src=\"".theme_image($link, 'images/art-email.png')."\" 
+					$rv['content'] .= "<img src=\"".theme_image($link, 'images/art-email.png')."\"
 						class='tagsPic' style=\"cursor : pointer\"
 						onclick=\"emailArticle($id)\"
 						alt='Zoom' title='".__('Forward by email')."'>";
 				}
 
 				if (ENABLE_TWEET_BUTTON) {
-					print "<img src=\"".theme_image($link, 'images/art-tweet.png')."\" 
+					$rv['content'] .= "<img src=\"".theme_image($link, 'images/art-tweet.png')."\"
 							class='tagsPic' style=\"cursor : pointer\"
 							onclick=\"tweetArticle($id)\"
 							alt='Zoom' title='".__('Share on Twitter')."'>";
 				}
 
-				print "<img src=\"".theme_image($link, 'images/digest_checkbox.png')."\" 
+				$rv['content'] .= "<img src=\"".theme_image($link, 'images/digest_checkbox.png')."\"
 						class='tagsPic' style=\"cursor : pointer\"
 						onclick=\"closeArticlePanel($id)\"
 						alt='Zoom' title='".__('Close this panel')."'>";
 
 			} else {
 				$tags_str = strip_tags($tags_str);
-				print "<span id=\"ATSTR-$id\">$tags_str</span>";
+				$rv['content'] .= "<span id=\"ATSTR-$id\">$tags_str</span>";
 			}
-			print "</div>";
-			print "<div clear='both'>$entry_comments</div>";
+			$rv['content'] .= "</div>";
+			$rv['content'] .= "<div clear='both'>$entry_comments</div>";
 
 			if ($line["orig_feed_id"]) {
 
@@ -4702,73 +4868,74 @@
 
 				if (db_num_rows($tmp_result) != 0) {
 
-					print "<div clear='both'>";
-					print __("Originally from:");
+					$rv['content'] .= "<div clear='both'>";
+					$rv['content'] .= __("Originally from:");
 
-					print "&nbsp;";
+					$rv['content'] .= "&nbsp;";
 
 					$tmp_line = db_fetch_assoc($tmp_result);
 
-					print "<a target='_blank' 
+					$rv['content'] .= "<a target='_blank'
 						href=' " . htmlspecialchars($tmp_line['site_url']) . "'>" .
 						$tmp_line['title'] . "</a>";
 
-					print "&nbsp;";
+					$rv['content'] .= "&nbsp;";
 
-					print "<a target='_blank' href='" . htmlspecialchars($tmp_line['feed_url']) . "'>";
-					print "<img title='".__('Feed URL')."'class='tinyFeedIcon' src='images/pub_set.gif'></a>";
+					$rv['content'] .= "<a target='_blank' href='" . htmlspecialchars($tmp_line['feed_url']) . "'>";
+					$rv['content'] .= "<img title='".__('Feed URL')."'class='tinyFeedIcon' src='images/pub_set.gif'></a>";
 
-					print "</div>";
+					$rv['content'] .= "</div>";
 				}
 			}
 
-			print "</div>";
+			$rv['content'] .= "</div>";
 
-			print "<div class=\"postIcon\">" . 
-				"<a target=\"_blank\" title=\"".__("Visit the website")."\"$ 
+			$rv['content'] .= "<div id=\"POSTNOTE-$id\">";
+				if ($line['note']) {
+					$rv['content'] .= format_article_note($id, $line['note']);
+				}
+			$rv['content'] .= "</div>";
+
+			$rv['content'] .= "<div class=\"postIcon\">" .
+				"<a target=\"_blank\" title=\"".__("Visit the website")."\"$
 				href=\"".htmlspecialchars($feed_site_url)."\">".
 				$feed_icon . "</a></div>";
 
-			print "<div id=\"POSTNOTE-$id\">";
-				if ($line['note']) {
-					print format_article_note($id, $line['note']);
-				}
-			print "</div>";
-
-			print "<div class=\"postContent\">";
+			$rv['content'] .= "<div class=\"postContent\">";
 
 			$article_content = sanitize_rss($link, $line["content"], false, false,
 				$feed_site_url);
 
-			print $article_content;
+			$rv['content'] .= $article_content;
 
-			print_article_enclosures($link, $id, $always_display_enclosures, 
-				$article_content);
+			$rv['content'] .= format_article_enclosures($link, $id,
+				$always_display_enclosures, $article_content);
 
-			print "</div>";
+			$rv['content'] .= "</div>";
 
-			print "</div>";
+			$rv['content'] .= "</div>";
 
 		}
 
-		if (!$zoom_mode) { 
-			print "]]></article>"; 
-		} else {
-			print "
+		if ($zoom_mode) {
+			$rv['content'] .= "
 				<div style=\"text-align : center\">
 				<button onclick=\"return window.close()\">".
 					__("Close this window")."</button></div>";
-			print "</body></html>";
-
+			$rv['content'] .= "</body></html>";
 		}
+
+		return $rv;
 
 	}
 
-	function outputHeadlinesList($link, $feed, $subop, $view_mode, $limit, $cat_view,
-					$next_unread_feed, $offset, $vgr_last_feed = false, 
+	function format_headlines_list($link, $feed, $subop, $view_mode, $limit, $cat_view,
+					$next_unread_feed, $offset, $vgr_last_feed = false,
 					$override_order = false) {
 
 		$disable_cache = false;
+
+		$reply = array();
 
 		$timing_info = getmicrotime();
 
@@ -4809,13 +4976,12 @@
 
 		// FIXME: might break tag display?
 
-		if ($feed > 0 && !$cat_view) {		
+		if ($feed > 0 && !$cat_view) {
 			$result = db_query($link,
 				"SELECT id FROM ttrss_feeds WHERE id = '$feed' LIMIT 1");
-		
+
 			if (db_num_rows($result) == 0) {
-				print "<div align='center'>".__('Feed not found.')."</div>";				
-				return;
+				$reply['content'] = "<div align='center'>".__('Feed not found.')."</div>";
 			}
 		}
 
@@ -4829,7 +4995,7 @@
 			} else {
 				$rtl_content = false;
 			}
-	
+
 			if ($rtl_content) {
 				$rtl_tag = "dir=\"RTL\"";
 			} else {
@@ -4844,7 +5010,7 @@
 
 		@$search = db_escape_string($_REQUEST["query"]);
 
-		if ($search) { 
+		if ($search) {
 			$disable_cache = true;
 		}
 
@@ -4859,7 +5025,7 @@
 
 		if ($_REQUEST["debug"]) $timing_info = print_checkpoint("H0", $timing_info);
 
-		$qfh_ret = queryFeedHeadlines($link, $feed, $limit, $view_mode, $cat_view, 
+		$qfh_ret = queryFeedHeadlines($link, $feed, $limit, $view_mode, $cat_view,
 			$search, $search_mode, $match_on, $override_order, $real_offset);
 
 		if ($_REQUEST["debug"]) $timing_info = print_checkpoint("H1", $timing_info);
@@ -4871,33 +5037,16 @@
 
 		$vgroup_last_feed = $vgr_last_feed;
 
-/*		if ($feed == -2) {
-			$feed_site_url = article_publish_url($link);
-		} */
-
 		/// STOP //////////////////////////////////////////////////////////////////////////////////
 
-		print "<toolbar><![CDATA[";
-
 		if (!$offset) {
-//			print "<div id=\"headlinesContainer\" $rtl_tag>";
-
-			if (!$result) {
-				print "<div align='center'>".__("Could not display feed (query failed). Please check label match syntax or local configuration.")."</div>";
-				return;
-			}
 
 			if (db_num_rows($result) > 0) {
-				print_headline_subtoolbar($link, $feed_site_url, $feed_title,
-					$feed, $cat_view, $search, $match_on, $search_mode, $view_mode, 
+				$reply['toolbar'] = format_headline_subtoolbar($link, $feed_site_url, $feed_title,
+					$feed, $cat_view, $search, $match_on, $search_mode, $view_mode,
 					$last_error);
-
-//				print "<div id=\"headlinesInnerContainer\" onscroll=\"headlines_scroll_handler()\">";
-
 			}
 		}
-
-		print "]]></toolbar><content><![CDATA[";
 
 		$headlines_count = db_num_rows($result);
 
@@ -4913,7 +5062,7 @@
 			while ($line = db_fetch_assoc($result)) {
 
 				$class = ($lnum % 2) ? "even" : "odd";
-	
+
 				$id = $line["id"];
 				$feed_id = $line["feed_id"];
 
@@ -4922,28 +5071,28 @@
 				$labels_str = "<span id=\"HLLCTR-$id\">";
 				$labels_str .= format_article_labels($labels, $id);
 				$labels_str .= "</span>";
-	
+
 				if (count($topmost_article_ids) < 3) {
 					array_push($topmost_article_ids, $id);
 				}
 
 				if ($line["last_read"] == "" && !sql_bool_to_bool($line["unread"])) {
-	
+
 					$update_pic = "<img id='FUPDPIC-$id' src=\"".
-						theme_image($link, 'images/updated.png')."\" 
+						theme_image($link, 'images/updated.png')."\"
 						alt=\"Updated\">";
 				} else {
-					$update_pic = "<img id='FUPDPIC-$id' src=\"images/blank_icon.gif\" 
+					$update_pic = "<img id='FUPDPIC-$id' src=\"images/blank_icon.gif\"
 						alt=\"Updated\">";
 				}
 
-				if (sql_bool_to_bool($line["unread"]) && 
+				if (sql_bool_to_bool($line["unread"]) &&
 					time() - strtotime($line["updated_noms"]) < $fresh_intl) {
 
 					$update_pic = "<img id='FUPDPIC-$id' src=\"".
 						theme_image($link, 'images/fresh_sign.png')."\" alt=\"Fresh\">";
 				}
-	
+
 				if ($line["unread"] == "t" || $line["unread"] == "1") {
 					$class .= " Unread";
 					++$num_unread;
@@ -4953,25 +5102,25 @@
 				}
 
 				if ($line["marked"] == "t" || $line["marked"] == "1") {
-					$marked_pic = "<img id=\"FMPIC-$id\" 
-						src=\"".theme_image($link, 'images/mark_set.png')."\" 
-						class=\"markedPic\" alt=\"Unstar article\" 
+					$marked_pic = "<img id=\"FMPIC-$id\"
+						src=\"".theme_image($link, 'images/mark_set.png')."\"
+						class=\"markedPic\" alt=\"Unstar article\"
 						onclick='javascript:tMark($id)'>";
 				} else {
-					$marked_pic = "<img id=\"FMPIC-$id\" 
-						src=\"".theme_image($link, 'images/mark_unset.png')."\" 
-						class=\"markedPic\" alt=\"Star article\" 
+					$marked_pic = "<img id=\"FMPIC-$id\"
+						src=\"".theme_image($link, 'images/mark_unset.png')."\"
+						class=\"markedPic\" alt=\"Star article\"
 						onclick='javascript:tMark($id)'>";
 				}
 
 				if ($line["published"] == "t" || $line["published"] == "1") {
-					$published_pic = "<img id=\"FPPIC-$id\" src=\"".theme_image($link, 
-						'images/pub_set.png')."\" 
+					$published_pic = "<img id=\"FPPIC-$id\" src=\"".theme_image($link,
+						'images/pub_set.png')."\"
 						class=\"markedPic\"
 						alt=\"Unpublish article\" onclick='javascript:tPub($id)'>";
 				} else {
 					$published_pic = "<img id=\"FPPIC-$id\" src=\"".theme_image($link,
-						'images/pub_unset.png')."\" 
+						'images/pub_unset.png')."\"
 						class=\"markedPic\"
 						alt=\"Publish article\" onclick='javascript:tPub($id)'>";
 				}
@@ -4979,7 +5128,7 @@
 #				$content_link = "<a target=\"_blank\" href=\"".$line["link"]."\">" .
 #					$line["title"] . "</a>";
 
-#				$content_link = "<a 
+#				$content_link = "<a
 #					href=\"" . htmlspecialchars($line["link"]) . "\"
 #					onclick=\"view($id,$feed_id);\">" .
 #					$line["title"] . "</a>";
@@ -4987,23 +5136,23 @@
 #				$content_link = "<a href=\"javascript:viewContentUrl('".$line["link"]."');\">" .
 #					$line["title"] . "</a>";
 
-				$updated_fmt = make_local_datetime($link, $line["updated_noms"], false);	
+				$updated_fmt = make_local_datetime($link, $line["updated_noms"], false);
 
 				if (get_pref($link, 'SHOW_CONTENT_PREVIEW')) {
-					$content_preview = truncate_string(strip_tags($line["content_preview"]), 
+					$content_preview = truncate_string(strip_tags($line["content_preview"]),
 						100);
 				}
 
 				$score = $line["score"];
 
-				$score_pic = theme_image($link, 
+				$score_pic = theme_image($link,
 					"images/" . get_score_pic($score));
 
 /*				$score_title = __("(Click to change)");
-				$score_pic = "<img class='hlScorePic' src=\"images/$score_pic\" 
+				$score_pic = "<img class='hlScorePic' src=\"images/$score_pic\"
 					onclick=\"adjustArticleScore($id, $score)\" title=\"$score $score_title\">"; */
 
-				$score_pic = "<img class='hlScorePic' src=\"$score_pic\" 
+				$score_pic = "<img class='hlScorePic' src=\"$score_pic\"
 					title=\"$score\">";
 
 				if ($score > 500) {
@@ -5040,7 +5189,7 @@
 
 							$vf_catchup_link = "(<a onclick='javascript:catchupFeedInGroup($feed_id);' href='#'>".__('mark as read')."</a>)";
 
-							print "<div class='cdmFeedTitle'>".
+							$reply['content'] .= "<div class='cdmFeedTitle'>".
 								"<div style=\"float : right\">$feed_icon_img</div>".
 								"<a href=\"#\" onclick=\"viewfeed($feed_id)\">".
 								$line["feed_title"]."</a> $vf_catchup_link</div>";
@@ -5048,42 +5197,42 @@
 						}
 					}
 
-					$mouseover_attrs = "onmouseover='postMouseIn($id)' 
+					$mouseover_attrs = "onmouseover='postMouseIn($id)'
 						onmouseout='postMouseOut($id)'";
 
-					print "<div class='$class' id='RROW-$id' $mouseover_attrs>";
+					$reply['content'] .= "<div class='$class' id='RROW-$id' $mouseover_attrs>";
 
-					print "<div class='hlUpdPic'>$update_pic</div>";
+					$reply['content'] .= "<div class='hlUpdPic'>$update_pic</div>";
 
-					print "<div class='hlLeft'>";
+					$reply['content'] .= "<div class='hlLeft'>";
 
-					print "<input type=\"checkbox\" onclick=\"tSR(this)\"
+					$reply['content'] .= "<input type=\"checkbox\" onclick=\"tSR(this)\"
 							id=\"RCHK-$id\">";
-		
-					print "$marked_pic";
-					print "$published_pic";
 
-					print "</div>";
+					$reply['content'] .= "$marked_pic";
+					$reply['content'] .= "$published_pic";
 
-					print "<div onclick='return hlClicked(event, $id)' 
+					$reply['content'] .= "</div>";
+
+					$reply['content'] .= "<div onclick='return hlClicked(event, $id)'
 						class=\"hlTitle\"><span class='hlContent$hlc_suffix'>";
-					print "<a id=\"RTITLE-$id\" 
+					$reply['content'] .= "<a id=\"RTITLE-$id\"
 						href=\"" . htmlspecialchars($line["link"]) . "\"
-						onclick=\"return false;\">" .
+						onclick=\"\">" .
 						$line["title"];
 
 					if (get_pref($link, 'SHOW_CONTENT_PREVIEW')) {
 						if ($content_preview) {
-							print "<span class=\"contentPreview\"> - $content_preview</span>";
+							$reply['content'] .= "<span class=\"contentPreview\"> - $content_preview</span>";
 						}
 					}
 
-					print "</a></span>";
+					$reply['content'] .= "</a></span>";
 
-					print $labels_str;
+					$reply['content'] .= $labels_str;
 
 					/* if (!get_pref($link, 'VFEED_GROUP_BY_FEED')) {
-						if (@$line["feed_title"]) {			
+						if (@$line["feed_title"]) {
 							print "<span class=\"hlFeed\">
 								(<a href=\"#\" onclick=\"viewfeed($feed_id)\">".
 								$line["feed_title"]."</a>)
@@ -5091,23 +5240,23 @@
 						}
 					} */
 
-					print "</div>";
+					$reply['content'] .= "</div>";
 
+					$reply['content'] .= "<span class=\"hlUpdated\">$updated_fmt</span>";
+					$reply['content'] .= "<div class=\"hlRight\">";
 
-
-					print "<div class=\"hlRight\">";					
-					print "<span class=\"hlUpdated\">$updated_fmt</span>";
-					print $score_pic;
+					$reply['content'] .= $score_pic;
 
 					if ($line["feed_title"] && !get_pref($link, 'VFEED_GROUP_BY_FEED')) {
 
-						print "<span onclick=\"viewfeed($feed_id)\" 
+						$reply['content'] .= "<span onclick=\"viewfeed($feed_id)\"
+							style=\"cursor : pointer\"
 							title=\"".htmlspecialchars($line['feed_title'])."\">
 							$feed_icon_img<span>";
 					}
 
-					print "</div>";
-					print "</div>";
+					$reply['content'] .= "</div>";
+					$reply['content'] .= "</div>";
 
 				} else {
 
@@ -5129,7 +5278,7 @@
 								//$feed_icon_img = "<img class=\"tinyFeedIcon\" src=\"images/blank_icon.gif\" alt=\"\">";
 							}
 
-							print "<div class='cdmFeedTitle'>".
+							$reply['content'] .= "<div class='cdmFeedTitle'>".
 								"<div style=\"float : right\">$feed_icon_img</div>".
 								"<a href=\"#\" onclick=\"viewfeed($feed_id)\">".
 								$line["feed_title"]."</a> $vf_catchup_link</div>";
@@ -5138,62 +5287,62 @@
 
 					$expand_cdm = get_pref($link, 'CDM_EXPANDED');
 
-					$mouseover_attrs = "onmouseover='postMouseIn($id)' 
+					$mouseover_attrs = "onmouseover='postMouseIn($id)'
 						onmouseout='postMouseOut($id)'";
 
-					print "<div class=\"$class\" 
+					$reply['content'] .= "<div class=\"$class\"
 						id=\"RROW-$id\" $mouseover_attrs'>";
 
-					print "<div class=\"cdmHeader\">";
+					$reply['content'] .= "<div class=\"cdmHeader\">";
 
-					print "<div style='float : right'>";
-					print "<span class='updated'>$updated_fmt</span>";
-					print "$score_pic";
+					$reply['content'] .= "<div style='float : right'>";
+					$reply['content'] .= "<span class='updated'>$updated_fmt</span>";
+					$reply['content'] .= "$score_pic";
 
 					if (!get_pref($link, "VFEED_GROUP_BY_FEED") && $line["feed_title"]) {
-						print "<span style=\"cursor : pointer\" 
+						$reply['content'] .= "<span style=\"cursor : pointer\"
 							title=\"".htmlspecialchars($line["feed_title"])."\"
 							onclick=\"viewfeed($feed_id)\">$feed_icon_img</span>";
 					}
-					print "<div class=\"updPic\">$update_pic</div>";
+					$reply['content'] .= "<div class=\"updPic\">$update_pic</div>";
 
-					print "</div>";
-				
-					print "<input type=\"checkbox\" onclick=\"toggleSelectRowById(this, 
+					$reply['content'] .= "</div>";
+
+					$reply['content'] .= "<input type=\"checkbox\" onclick=\"toggleSelectRowById(this,
 							'RROW-$id')\" id=\"RCHK-$id\"/>";
 
-					print "$marked_pic";
-					print "$published_pic";
+					$reply['content'] .= "$marked_pic";
+					$reply['content'] .= "$published_pic";
 
-					print "<span id=\"RTITLE-$id\" 
+					$reply['content'] .= "<span id=\"RTITLE-$id\"
 						onclick=\"return cdmClicked(event, $id);\"
 						class=\"titleWrap$hlc_suffix\">
 						<a class=\"title\"
 						title=\"".htmlspecialchars($line['title'])."\"
 						target=\"_blank\" href=\"".
 						htmlspecialchars($line["link"])."\">".
-						truncate_string($line["title"], 100) . 
+						truncate_string($line["title"], 100) .
 						" $entry_author</a>";
 
-					print $labels_str;
+					$reply['content'] .= $labels_str;
 
 					if (!$expand_cdm)
 						$content_hidden = "style=\"display : none\"";
 					else
 						$excerpt_hidden = "style=\"display : none\"";
 
-					print "<span $excerpt_hidden
+					$reply['content'] .= "<span $excerpt_hidden
 						id=\"CEXC-$id\" class=\"cdmExcerpt\"> - $content_preview</span>";
 
-					print "</span>";
+					$reply['content'] .= "</span>";
 
-					print "</div>";
+					$reply['content'] .= "</div>";
 
-					print "<div class=\"cdmContent\" $content_hidden
+					$reply['content'] .= "<div class=\"cdmContent\" $content_hidden
 						onclick=\"return cdmClicked(event, $id);\"
 						id=\"CICD-$id\">";
 
-					print "<div class=\"cdmContentInner\">";
+					$reply['content'] .= "<div class=\"cdmContentInner\">";
 
 			if ($line["orig_feed_id"]) {
 
@@ -5201,24 +5350,24 @@
 					WHERE id = ".$line["orig_feed_id"]);
 
 						if (db_num_rows($tmp_result) != 0) {
-		
-							print "<div clear='both'>";
-							print __("Originally from:");
-		
-							print "&nbsp;";
-		
+
+							$reply['content'] .= "<div clear='both'>";
+							$reply['content'] .= __("Originally from:");
+
+							$reply['content'] .= "&nbsp;";
+
 							$tmp_line = db_fetch_assoc($tmp_result);
-		
-							print "<a target='_blank' 
+
+							$reply['content'] .= "<a target='_blank'
 								href=' " . htmlspecialchars($tmp_line['site_url']) . "'>" .
 								$tmp_line['title'] . "</a>";
-		
-							print "&nbsp;";
-		
-							print "<a target='_blank' href='" . htmlspecialchars($tmp_line['feed_url']) . "'>";
-							print "<img title='".__('Feed URL')."'class='tinyFeedIcon' src='images/pub_set.gif'></a>";
-		
-							print "</div>";
+
+							$reply['content'] .= "&nbsp;";
+
+							$reply['content'] .= "<a target='_blank' href='" . htmlspecialchars($tmp_line['feed_url']) . "'>";
+							$reply['content'] .= "<img title='".__('Feed URL')."'class='tinyFeedIcon' src='images/pub_set.gif'></a>";
+
+							$reply['content'] .= "</div>";
 						}
 					}
 
@@ -5236,7 +5385,7 @@
 					}
 
 					if ($expand_cdm) {
-						$article_content = sanitize_rss($link, $line["content_preview"], 
+						$article_content = sanitize_rss($link, $line["content_preview"],
 							false, false, $feed_site_url);
 
 						if (!$article_content) $article_content = "&nbsp;";
@@ -5244,82 +5393,82 @@
 						$article_content = '';
 					}
 
-					print "<div id=\"POSTNOTE-$id\">";
+					$reply['content'] .= "<div id=\"POSTNOTE-$id\">";
 					if ($line['note']) {
-						print format_article_note($id, $line['note']);
+						$reply['content'] .= format_article_note($id, $line['note']);
 					}
-					print "</div>";
+					$reply['content'] .= "</div>";
 
-					print "<span id=\"CWRAP-$id\">$article_content</span>";
+					$reply['content'] .= "<span id=\"CWRAP-$id\">$article_content</span>";
 
 					$tmp_result = db_query($link, "SELECT always_display_enclosures FROM
 						ttrss_feeds WHERE id = ".
-						(($line['feed_id'] == null) ? $line['orig_feed_id'] : 
+						(($line['feed_id'] == null) ? $line['orig_feed_id'] :
 								$line['feed_id'])." AND owner_uid = ".$_SESSION["uid"]);
 
-					$always_display_enclosures = sql_bool_to_bool(db_fetch_result($tmp_result, 
+					$always_display_enclosures = sql_bool_to_bool(db_fetch_result($tmp_result,
 						0, "always_display_enclosures"));
 
-					print_article_enclosures($link, $id, $always_display_enclosures,
+					$reply['content'] .= format_article_enclosures($link, $id, $always_display_enclosures,
 						$article_content);
 
-					print "</div>";
+					$reply['content'] .= "</div>";
 
-					print "<div class=\"cdmFooter\">";
+					$reply['content'] .= "<div class=\"cdmFooter\">";
 
 					$tags_str = format_tags_string(get_article_tags($link, $id), $id);
 
-					print "<img src='".theme_image($link,
+					$reply['content'] .= "<img src='".theme_image($link,
 							'images/tag.png')."' alt='Tags' title='Tags'>
 						<span id=\"ATSTR-$id\">$tags_str</span>
-						<a title=\"".__('Edit tags for this article')."\" 
+						<a title=\"".__('Edit tags for this article')."\"
 						href=\"#\" onclick=\"editArticleTags($id, $feed_id, true)\">(+)</a>";
 
-					print "<div style=\"float : right\">";
+					$reply['content'] .= "<div style=\"float : right\">";
 
-					print "<img src=\"images/art-zoom.png\" 
+					$reply['content'] .= "<img src=\"images/art-zoom.png\"
 						onclick=\"zoomToArticle(event, $id)\"
 						style=\"cursor : pointer\"
-						alt='Zoom' 
+						alt='Zoom'
 						title='".__('Open article in new tab')."'>";
 
 					//$note_escaped = htmlspecialchars($line['note'], ENT_QUOTES);
 
-					print "<img src=\"images/art-pub-note.png\"
+					$reply['content'] .= "<img src=\"images/art-pub-note.png\"
 						style=\"cursor : pointer\" style=\"cursor : pointer\"
 						onclick=\"editArticleNote($id)\"
 						alt='PubNote' title='".__('Edit article note')."'>";
 
 					if (DIGEST_ENABLE) {
-						print "<img src=\"".theme_image($link, 'images/art-email.png')."\" 
+						$reply['content'] .= "<img src=\"".theme_image($link, 'images/art-email.png')."\"
 							style=\"cursor : pointer\"
 							onclick=\"emailArticle($id)\"
 							alt='Zoom' title='".__('Forward by email')."'>";
 					}
 
 					if (ENABLE_TWEET_BUTTON) {
-						print "<img src=\"".theme_image($link, 'images/art-tweet.png')."\" 
+						$reply['content'] .= "<img src=\"".theme_image($link, 'images/art-tweet.png')."\"
 							class='tagsPic' style=\"cursor : pointer\"
 							onclick=\"tweetArticle($id)\"
 							alt='Zoom' title='".__('Share on Twitter')."'>";
 					}
 
-					print "<img src=\"images/digest_checkbox.png\"
+					$reply['content'] .= "<img src=\"images/digest_checkbox.png\"
 						style=\"cursor : pointer\" style=\"cursor : pointer\"
 						onclick=\"dismissArticle($id)\"
 						alt='Dismiss' title='".__('Dismiss article')."'>";
 
-					print "</div>";
-					print "</div>";
+					$reply['content'] .= "</div>";
+					$reply['content'] .= "</div>";
 
-					print "</div>";
+					$reply['content'] .= "</div>";
 
-					print "</div>";
+					$reply['content'] .= "</div>";
 
-				} 
-	
+				}
+
 				++$lnum;
-			} 
+			}
 
 		} else {
 			$message = "";
@@ -5343,29 +5492,29 @@
 			}
 
 			if (!$offset && $message) {
-				print "<div class='whiteBox'>$message";
+				$reply['content'] .= "<div class='whiteBox'>$message";
 
-				print "<p class=\"small\"><span class=\"insensitive\">";
+				$reply['content'] .= "<p class=\"small\"><span class=\"insensitive\">";
 
 				$result = db_query($link, "SELECT ".SUBSTRING_FOR_DATE."(MAX(last_updated), 1, 19) AS last_updated FROM ttrss_feeds
 					WHERE owner_uid = " . $_SESSION['uid']);
-		
+
 				$last_updated = db_fetch_result($result, 0, "last_updated");
 				$last_updated = make_local_datetime($link, $last_updated, false);
-		
-				printf(__("Feeds last updated at %s"), $last_updated);
-		
+
+				$reply['content'] .= sprintf(__("Feeds last updated at %s"), $last_updated);
+
 				$result = db_query($link, "SELECT COUNT(id) AS num_errors
 					FROM ttrss_feeds WHERE last_error != '' AND owner_uid = ".$_SESSION["uid"]);
-		
+
 				$num_errors = db_fetch_result($result, 0, "num_errors");
-		
+
 				if ($num_errors > 0) {
-					print "<br/>";
-					print "<a class=\"insensitive\" href=\"#\" onclick=\"showFeedsWithErrors()\">".
+					$reply['content'] .= "<br/>";
+					$reply['content'] .= "<a class=\"insensitive\" href=\"#\" onclick=\"showFeedsWithErrors()\">".
 						__('Some feeds have update errors (click for details)')."</a>";
 				}
-				print "</span></p></div>";
+				$reply['content'] .= "</span></p></div>";
 			}
 		}
 
@@ -5374,17 +5523,18 @@
 #			print "</div>";
 #		}
 
-		print "]]></content>";
+		#print "]]></content>";
 
-		return array($topmost_article_ids, $headlines_count, $feed, $disable_cache, $vgroup_last_feed);
+		return array($topmost_article_ids, $headlines_count, $feed, $disable_cache,
+			$vgroup_last_feed, $reply['content'], $reply['toolbar']);
 	}
 
 // from here: http://www.roscripts.com/Create_tag_cloud-71.html
 
 	function printTagCloud($link) {
 
-		$query = "SELECT tag_name, COUNT(post_int_id) AS count 
-			FROM ttrss_tags WHERE owner_uid = ".$_SESSION["uid"]." 
+		$query = "SELECT tag_name, COUNT(post_int_id) AS count
+			FROM ttrss_tags WHERE owner_uid = ".$_SESSION["uid"]."
 			GROUP BY tag_name ORDER BY count DESC LIMIT 50";
 
 		$result = db_query($link, $query);
@@ -5399,20 +5549,20 @@
 
 		$max_size = 32; // max font size in pixels
 		$min_size = 11; // min font size in pixels
-		   
+
 		// largest and smallest array values
 		$max_qty = max(array_values($tags));
 		$min_qty = min(array_values($tags));
-		   
+
 		// find the range of values
 		$spread = $max_qty - $min_qty;
 		if ($spread == 0) { // we don't want to divide by zero
 				$spread = 1;
 		}
-		   
+
 		// set the font-size increment
 		$step = ($max_size - $min_size) / ($spread);
-		   
+
 		// loop through the tag array
 		foreach ($tags as $key => $value) {
 			// calculate font-size
@@ -5423,14 +5573,14 @@
 
 			$key_escaped = str_replace("'", "\\'", $key);
 
-			echo "<a href=\"javascript:viewfeed('$key_escaped') \" style=\"font-size: " . 
-				$size . "px\" title=\"$value articles tagged with " . 
+			echo "<a href=\"javascript:viewfeed('$key_escaped') \" style=\"font-size: " .
+				$size . "px\" title=\"$value articles tagged with " .
 				$key . '">' . $key . '</a> ';
 		}
 	}
 
 	function print_checkpoint($n, $s) {
-		$ts = getmicrotime();	
+		$ts = getmicrotime();
 		echo sprintf("<!-- CP[$n] %.4f seconds -->", $ts - $s);
 		return $ts;
 	}
@@ -5440,10 +5590,10 @@
 
 		$tag = mb_strtolower($tag, 'utf-8');
 
-		$tag = preg_replace('/[\"\+\>\<]/', "", $tag);	
+		$tag = preg_replace('/[\'\"\+\>\<]/', "", $tag);
 
-//		$tag = str_replace('"', "", $tag);	
-//		$tag = str_replace("+", " ", $tag);	
+//		$tag = str_replace('"', "", $tag);
+//		$tag = str_replace("+", " ", $tag);
 		$tag = str_replace("technorati tag: ", "", $tag);
 
 		return $tag;
@@ -5451,8 +5601,8 @@
 
 	function get_self_url_prefix() {
 
-		$url_path = "";
-	
+		/* $url_path = "";
+
 		if ($_SERVER['HTTPS'] != "on") {
 			$url_path = "http://";
 		} else {
@@ -5461,13 +5611,15 @@
 
 		$url_path .= $_SERVER['HTTP_HOST'].dirname($_SERVER['PHP_SELF']);
 
-		return $url_path;
+		return $url_path; */
+
+		return SELF_URL_PATH;
 
 	}
 	function opml_publish_url($link){
 
 		$url_path = get_self_url_prefix();
-		$url_path .= "/opml.php?op=publish&key=" . 
+		$url_path .= "/opml.php?op=publish&key=" .
 			get_feed_access_key($link, 'OPML:Publish', false, $_SESSION["uid"]);
 
 		return $url_path;
@@ -5475,7 +5627,7 @@
 
 	/**
 	 * Purge a feed contents, marked articles excepted.
-	 * 
+	 *
 	 * @param mixed $link The database connection.
 	 * @param integer $id The id of the feed to purge.
 	 * @return void
@@ -5490,7 +5642,7 @@
 			WHERE feed_id IS NULL AND marked = false AND owner_uid = " . $_SESSION["uid"]);
 		}
 
-		$result = db_query($link, "DELETE FROM ttrss_entries WHERE 
+		$result = db_query($link, "DELETE FROM ttrss_entries WHERE
 			(SELECT COUNT(int_id) FROM ttrss_user_entries WHERE ref_id = id) = 0");
 
 		ccache_update($link, $id, $_SESSION['uid']);
@@ -5502,14 +5654,16 @@
 	 * @return string The Mozilla Firefox feed adding URL.
 	 */
 	function add_feed_url() {
-		$url_path = ($_SERVER['HTTPS'] != "on" ? 'http://' :  'https://') . $_SERVER["HTTP_HOST"] . parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH);
-		$url_path .= "?op=pref-feeds&quiet=1&subop=add&feed_url=%s";
+		//$url_path = ($_SERVER['HTTPS'] != "on" ? 'http://' :  'https://') . $_SERVER["HTTP_HOST"] . parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH);
+
+		$url_path = get_self_url_prefix() .
+			"/backend.php?op=pref-feeds&quiet=1&subop=add&feed_url=%s";
 		return $url_path;
 	} // function add_feed_url
 
 	/**
 	 * Encrypt a password in SHA1.
-	 * 
+	 *
 	 * @param string $pass The password to encrypt.
 	 * @param string $login A optionnal login.
 	 * @return string The encrypted password.
@@ -5527,7 +5681,7 @@
 	 * Used by daemons to update n feeds by run.
 	 * Only update feed needing a update, and not being processed
 	 * by another process.
-	 * 
+	 *
 	 * @param mixed $link Database link
 	 * @param integer $limit Maximum number of feeds in update batch. Default to DAEMON_FEED_LIMIT.
 	 * @param boolean $from_http Set to true if you call this function from http to disable cli specific code.
@@ -5543,7 +5697,7 @@
 				$login_thresh_qpart = "AND ttrss_users.last_login >= NOW() - INTERVAL '".DAEMON_UPDATE_LOGIN_LIMIT." days'";
 			} else {
 				$login_thresh_qpart = "AND ttrss_users.last_login >= DATE_SUB(NOW(), INTERVAL ".DAEMON_UPDATE_LOGIN_LIMIT." DAY)";
-			}			
+			}
 		} else {
 			$login_thresh_qpart = "";
 		}
@@ -5583,8 +5737,8 @@
 		// We search for feed needing update.
 		$result = db_query($link, "SELECT ttrss_feeds.feed_url,ttrss_feeds.id, ttrss_feeds.owner_uid,
 				".SUBSTRING_FOR_DATE."(ttrss_feeds.last_updated,1,19) AS last_updated,
-				ttrss_feeds.update_interval 
-			FROM 
+				ttrss_feeds.update_interval
+			FROM
 				ttrss_feeds, ttrss_users, ttrss_user_prefs
 			WHERE
 				ttrss_feeds.owner_uid = ttrss_users.id
@@ -5649,21 +5803,21 @@
 		} else {
 
 			if ($action_id) $ftype_query_part = "action_id = '$action_id' AND";
-	
+
 			$result = db_query($link, "SELECT reg_exp,
 				ttrss_filter_types.name AS name,
 				ttrss_filter_actions.name AS action,
 				inverse,
 				action_param,
 				filter_param
-				FROM ttrss_filters,ttrss_filter_types,ttrss_filter_actions WHERE 					
+				FROM ttrss_filters,ttrss_filter_types,ttrss_filter_actions WHERE
 					enabled = true AND
 					$ftype_query_part
 					owner_uid = $owner_uid AND
 					ttrss_filter_types.id = filter_type AND
 					ttrss_filter_actions.id = action_id AND
 					(feed_id IS NULL OR feed_id = '$feed') ORDER BY reg_exp");
-	
+
 			while ($line = db_fetch_assoc($result)) {
 				if (!$filters[$line["name"]]) $filters[$line["name"]] = array();
 					$filter["reg_exp"] = $line["reg_exp"];
@@ -5671,7 +5825,7 @@
 					$filter["action_param"] = $line["action_param"];
 					$filter["filter_param"] = $line["filter_param"];
 					$filter["inverse"] = sql_bool_to_bool($line["inverse"]);
-				
+
 					array_push($filters[$line["name"]], $filter);
 				}
 
@@ -5682,15 +5836,15 @@
 	}
 
 	function get_score_pic($score) {
-		if ($score > 100) { 
-			return "score_high.png"; 
-		} else if ($score > 0) { 
+		if ($score > 100) {
+			return "score_high.png";
+		} else if ($score > 0) {
 			return "score_half_high.png";
 		} else if ($score < -100) {
 			return "score_low.png";
 		} else if ($score < 0) {
 			return "score_half_low.png";
-		} else { 
+		} else {
 			return "score_neutral.png";
 		}
 	}
@@ -5729,38 +5883,39 @@
 
 	function update_feedbrowser_cache($link) {
 
-		$result = db_query($link, "SELECT feed_url,title, COUNT(id) AS subscribers
-	  		FROM ttrss_feeds WHERE (SELECT COUNT(id) = 0 FROM ttrss_feeds AS tf 
-				WHERE tf.feed_url = ttrss_feeds.feed_url 
-				AND (private IS true OR feed_url LIKE '%:%@%/%')) 
-				GROUP BY feed_url, title ORDER BY subscribers DESC LIMIT 1000");
-	
+		$result = db_query($link, "SELECT feed_url, site_url, title, COUNT(id) AS subscribers
+	  		FROM ttrss_feeds WHERE (SELECT COUNT(id) = 0 FROM ttrss_feeds AS tf
+				WHERE tf.feed_url = ttrss_feeds.feed_url
+				AND (private IS true OR auth_login != '' OR auth_pass != '' OR feed_url LIKE '%:%@%/%'))
+				GROUP BY feed_url, site_url, title ORDER BY subscribers DESC LIMIT 1000");
+
 		db_query($link, "BEGIN");
-	
+
 		db_query($link, "DELETE FROM ttrss_feedbrowser_cache");
-	
+
 		$count = 0;
-	
+
 		while ($line = db_fetch_assoc($result)) {
 			$subscribers = db_escape_string($line["subscribers"]);
 			$feed_url = db_escape_string($line["feed_url"]);
 			$title = db_escape_string($line["title"]);
+			$site_url = db_escape_string($line["site_url"]);
 
 			$tmp_result = db_query($link, "SELECT subscribers FROM
 				ttrss_feedbrowser_cache WHERE feed_url = '$feed_url'");
 
 			if (db_num_rows($tmp_result) == 0) {
 
-				db_query($link, "INSERT INTO ttrss_feedbrowser_cache 
-					(feed_url, title, subscribers) VALUES ('$feed_url', 
-						'$title', '$subscribers')");
+				db_query($link, "INSERT INTO ttrss_feedbrowser_cache
+					(feed_url, site_url, title, subscribers) VALUES ('$feed_url',
+						'$site_url', '$title', '$subscribers')");
 
 				++$count;
 
 			}
-	
+
 		}
-	
+
 		db_query($link, "COMMIT");
 
 		return $count;
@@ -5821,7 +5976,7 @@
 		}
 	}
 
-	function ccache_find($link, $feed_id, $owner_uid, $is_cat = false, 
+	function ccache_find($link, $feed_id, $owner_uid, $is_cat = false,
 		$no_update = false) {
 
 		if (!is_numeric($feed_id)) return;
@@ -5829,7 +5984,7 @@
 		if (!$is_cat) {
 			$table = "ttrss_counters_cache";
 			if ($feed_id > 0) {
-				$tmp_result = db_query($link, "SELECT owner_uid FROM ttrss_feeds 
+				$tmp_result = db_query($link, "SELECT owner_uid FROM ttrss_feeds
 					WHERE id = '$feed_id'");
 				$owner_uid = db_fetch_result($tmp_result, 0, "owner_uid");
 			}
@@ -5844,7 +5999,7 @@
 		}
 
 		$result = db_query($link, "SELECT value FROM $table
-			WHERE owner_uid = '$owner_uid' AND feed_id = '$feed_id' 
+			WHERE owner_uid = '$owner_uid' AND feed_id = '$feed_id'
 			LIMIT 1");
 
 		if (db_num_rows($result) == 1) {
@@ -5859,13 +6014,13 @@
 
 	}
 
-	function ccache_update($link, $feed_id, $owner_uid, $is_cat = false, 
+	function ccache_update($link, $feed_id, $owner_uid, $is_cat = false,
 		$update_pcat = true) {
 
 		if (!is_numeric($feed_id)) return;
 
 		if (!$is_cat && $feed_id > 0) {
-			$tmp_result = db_query($link, "SELECT owner_uid FROM ttrss_feeds 
+			$tmp_result = db_query($link, "SELECT owner_uid FROM ttrss_feeds
 				WHERE id = '$feed_id'");
 			$owner_uid = db_fetch_result($tmp_result, 0, "owner_uid");
 		}
@@ -5902,9 +6057,9 @@
 				ccache_update($link, $line["id"], $owner_uid, false, false);
 			}
 
-			$result = db_query($link, "SELECT SUM(value) AS sv 
-				FROM ttrss_counters_cache, ttrss_feeds 
-				WHERE id = feed_id AND $cat_qpart AND 
+			$result = db_query($link, "SELECT SUM(value) AS sv
+				FROM ttrss_counters_cache, ttrss_feeds
+				WHERE id = feed_id AND $cat_qpart AND
 				ttrss_feeds.owner_uid = '$owner_uid'");
 
 			$unread = (int) db_fetch_result($result, 0, "sv");
@@ -5925,8 +6080,8 @@
 
 		} else {
 			db_query($link, "INSERT INTO $table
-				(feed_id, value, owner_uid, updated) 
-				VALUES 
+				(feed_id, value, owner_uid, updated)
+				VALUES
 				($feed_id, $unread, $owner_uid, NOW())");
 		}
 
@@ -5957,8 +6112,8 @@
 	}
 
 	function label_find_id($link, $label, $owner_uid) {
-		$result = db_query($link, 
-			"SELECT id FROM ttrss_labels2 WHERE caption = '$label' 
+		$result = db_query($link,
+			"SELECT id FROM ttrss_labels2 WHERE caption = '$label'
 				AND owner_uid = '$owner_uid' LIMIT 1");
 
 		if (db_num_rows($result) == 1) {
@@ -5995,11 +6150,11 @@
 					return $label_cache;
 			}
 
-			$result = db_query($link, 
-				"SELECT DISTINCT label_id,caption,fg_color,bg_color 
-					FROM ttrss_labels2, ttrss_user_labels2 
-				WHERE id = label_id 
-					AND article_id = '$id' 
+			$result = db_query($link,
+				"SELECT DISTINCT label_id,caption,fg_color,bg_color
+					FROM ttrss_labels2, ttrss_user_labels2
+				WHERE id = label_id
+					AND article_id = '$id'
 					AND owner_uid = ".$_SESSION["uid"] . "
 				ORDER BY caption");
 
@@ -6010,7 +6165,7 @@
 			}
 			if ($memcache) $memcache->add($obj_id, $rv, 0, 3600);
 
-			if (count($rv) > 0) 
+			if (count($rv) > 0)
 				label_update_cache($link, $id, $rv);
 			else
 				label_update_cache($link, $id, array("no-labels" => 1));
@@ -6021,8 +6176,8 @@
 
 
 	function label_find_caption($link, $label, $owner_uid) {
-		$result = db_query($link, 
-			"SELECT caption FROM ttrss_labels2 WHERE id = '$label' 
+		$result = db_query($link,
+			"SELECT caption FROM ttrss_labels2 WHERE id = '$label'
 				AND owner_uid = '$owner_uid' LIMIT 1");
 
 		if (db_num_rows($result) == 1) {
@@ -6037,7 +6192,7 @@
 		if ($force)
 			label_clear_cache($link, $id);
 
-		if (!$labels) 
+		if (!$labels)
 			$labels = get_article_labels($link, $id);
 
 		$labels = db_escape_string(json_encode($labels));
@@ -6060,9 +6215,9 @@
 
 		if (!$label_id) return;
 
-		$result = db_query($link, 
+		$result = db_query($link,
 			"DELETE FROM ttrss_user_labels2
-			WHERE 
+			WHERE
 				label_id = '$label_id' AND
 				article_id = '$id'");
 
@@ -6082,21 +6237,21 @@
 
 		if (!$label_id) return;
 
-		$result = db_query($link, 
-			"SELECT 
+		$result = db_query($link,
+			"SELECT
 				article_id FROM ttrss_labels2, ttrss_user_labels2
-			WHERE 
-				label_id = id AND 
+			WHERE
+				label_id = id AND
 				label_id = '$label_id' AND
 				article_id = '$id' AND owner_uid = '$owner_uid'
 			LIMIT 1");
 
 		if (db_num_rows($result) == 0) {
-			db_query($link, "INSERT INTO ttrss_user_labels2 
+			db_query($link, "INSERT INTO ttrss_user_labels2
 				(label_id, article_id) VALUES ('$label_id', '$id')");
 		}
 
-		label_clear_cache($link, $id);	
+		label_clear_cache($link, $id);
 
 	}
 
@@ -6130,7 +6285,7 @@
 				feed_id = '$ext_id' AND owner_uid = $owner_uid");
 
 			/* Disable filters that reference label being removed */
-	
+
 			db_query($link, "UPDATE ttrss_filters SET
 				enabled = false WHERE action_param = '$caption'
 					AND action_id = 7
@@ -6157,7 +6312,7 @@
 
 		if (db_num_rows($result) == 0) {
 			$result = db_query($link,
-				"INSERT INTO ttrss_labels2 (caption,owner_uid) 
+				"INSERT INTO ttrss_labels2 (caption,owner_uid)
 					VALUES ('$caption', '".$_SESSION["uid"]."')");
 
 			$result = db_affected_rows($link, $result) != 0;
@@ -6181,11 +6336,11 @@
 			$id = $line["id"];
 
 			if ($feed_id < -10 && $feed_id == -11-$label_id) {
-				print "<option id=\"LHDL-$id\" 
+				print "<option id=\"LHDL-$id\"
 					value=\"selectionRemoveLabel($label_id)\">".
 					__('Remove:') . " $label_caption</option>";
-			} else {					
-				print "<option id=\"LHDL-$id\" 
+			} else {
+				print "<option id=\"LHDL-$id\"
 					value=\"selectionAssignLabel($label_id)\">".
 					__('Assign:') . " $label_caption</option>";
 			}
@@ -6222,7 +6377,7 @@
 			array_push($formatted_tags, $tag_str);
 
 			$tmp_tags_str = implode(", ", $formatted_tags);
-				
+
 			if ($num_tags == $tag_limit || mb_strlen($tmp_tags_str) > 150) {
 				break;
 			}
@@ -6247,7 +6402,7 @@
 		$labels_str = "";
 
 		foreach ($labels as $l) {
-			$labels_str .= sprintf("<span class='hlLabelRef' 
+			$labels_str .= sprintf("<span class='hlLabelRef'
 				style='color : %s; background-color : %s'>%s</span>",
 					$l[2], $l[3], $l[1]);
 			}
@@ -6258,8 +6413,9 @@
 
 	function format_article_note($id, $note) {
 
-		$str = "<div class='articleNote' title=\"".__('edit note')."\" 
-			onclick=\"editArticleNote($id)\">$note</div>";
+		$str = "<div class='articleNote'	onclick=\"editArticleNote($id)\">
+			<div class='noteEdit' onclick=\"editArticleNote($id)\">".
+			__('(edit note)')."</div>$note</div>";
 
 		return $str;
 	}
@@ -6269,7 +6425,7 @@
 			$mode = bool_to_sql_bool($mode);
 
 			db_query($link, "UPDATE ttrss_feed_categories SET
-				collapsed = $mode WHERE id = '$cat_id' AND owner_uid = " . 
+				collapsed = $mode WHERE id = '$cat_id' AND owner_uid = " .
 				$_SESSION["uid"]);
 		} else {
 			$pref_name = '';
@@ -6310,14 +6466,14 @@
 				WHERE id = '$id'");
 
 			if (db_num_rows($result) == 0) {
-				db_query($link, "INSERT INTO ttrss_archived_feeds 
+				db_query($link, "INSERT INTO ttrss_archived_feeds
 					(id, owner_uid, title, feed_url, site_url)
 				SELECT id, owner_uid, title, feed_url, site_url from ttrss_feeds
 			  	WHERE id = '$id'");
 			}
 
 			db_query($link, "UPDATE ttrss_user_entries SET feed_id = NULL,
-				orig_feed_id = '$id' WHERE feed_id = '$id' AND 
+				orig_feed_id = '$id' WHERE feed_id = '$id' AND
 					marked = true AND owner_uid = $owner_uid");
 
 			/* Remove access key for the feed */
@@ -6327,7 +6483,7 @@
 
 			/* remove the feed */
 
-			db_query($link, "DELETE FROM ttrss_feeds 
+			db_query($link, "DELETE FROM ttrss_feeds
 					WHERE id = '$id' AND owner_uid = $owner_uid");
 
 			db_query($link, "COMMIT");
@@ -6355,9 +6511,9 @@
 			WHERE title = '$feed_cat' AND owner_uid = ".$_SESSION["uid"]);
 
 		if (db_num_rows($result) == 0) {
-			
+
 			$result = db_query($link,
-				"INSERT INTO ttrss_feed_categories (owner_uid,title) 
+				"INSERT INTO ttrss_feed_categories (owner_uid,title)
 				VALUES ('".$_SESSION["uid"]."', '$feed_cat')");
 
 			db_query($link, "COMMIT");
@@ -6366,7 +6522,7 @@
 		}
 
 		return false;
-	}			
+	}
 
 	function remove_feed_category($link, $id, $owner_uid) {
 
@@ -6393,13 +6549,13 @@
 					WHERE id = '$feed_id'");
 
 				if (db_num_rows($result) == 0) {
-					db_query($link, "INSERT INTO ttrss_archived_feeds 
+					db_query($link, "INSERT INTO ttrss_archived_feeds
 						(id, owner_uid, title, feed_url, site_url)
 					SELECT id, owner_uid, title, feed_url, site_url from ttrss_feeds
 				  	WHERE id = '$feed_id'");
 				}
 
-				db_query($link, "UPDATE ttrss_user_entries 
+				db_query($link, "UPDATE ttrss_user_entries
 					SET orig_feed_id = feed_id, feed_id = NULL
 					WHERE ref_id = '$id' AND owner_uid = " . $_SESSION["uid"]);
 			}
@@ -6409,7 +6565,7 @@
 	}
 
 	function getArticleFeed($link, $id) {
-		$result = db_query($link, "SELECT feed_id FROM ttrss_user_entries 
+		$result = db_query($link, "SELECT feed_id FROM ttrss_user_entries
 			WHERE ref_id = '$id' AND owner_uid = " . $_SESSION["uid"]);
 
 		if (db_num_rows($result) != 0) {
@@ -6467,7 +6623,7 @@
 
 		global $memcache;
 
-		$query = "SELECT * FROM ttrss_enclosures 
+		$query = "SELECT * FROM ttrss_enclosures
 			WHERE post_id = '$id' AND content_url != ''";
 
 		$obj_id = md5("ENCLOSURES:$id");
@@ -6502,16 +6658,16 @@
 				foreach (array_values($counters) as $cv) {
 
 					$unread = $cv["counter"];
-	
+
 					if ($unread || !$unread_only) {
-	
+
 						$row = array(
 								"id" => $cv["id"],
 								"title" => $cv["description"],
 								"unread" => $cv["counter"],
 								"cat_id" => -2,
 							);
-	
+
 						array_push($feeds, $row);
 					}
 				}
@@ -6535,7 +6691,7 @@
 						array_push($feeds, $row);
 					}
 
-				}			
+				}
 			}
 
 			/* Real feeds */
@@ -6547,10 +6703,10 @@
 			}
 
 			if ($cat_id == -4 || $cat_id == -3) {
-				$result = db_query($link, "SELECT 
+				$result = db_query($link, "SELECT
 					id, feed_url, cat_id, title, ".
 						SUBSTRING_FOR_DATE."(last_updated,1,19) AS last_updated
-						FROM ttrss_feeds WHERE owner_uid = " . $_SESSION["uid"] . 
+						FROM ttrss_feeds WHERE owner_uid = " . $_SESSION["uid"] .
 						" ORDER BY cat_id, title " . $limit_qpart);
 			} else {
 
@@ -6559,11 +6715,11 @@
 				else
 					$cat_qpart = "cat_id IS NULL";
 
-				$result = db_query($link, "SELECT 
+				$result = db_query($link, "SELECT
 					id, feed_url, cat_id, title, ".
 						SUBSTRING_FOR_DATE."(last_updated,1,19) AS last_updated
-						FROM ttrss_feeds WHERE 
-						$cat_qpart AND owner_uid = " . $_SESSION["uid"] . 
+						FROM ttrss_feeds WHERE
+						$cat_qpart AND owner_uid = " . $_SESSION["uid"] .
 						" ORDER BY cat_id, title " . $limit_qpart);
 			}
 
@@ -6584,7 +6740,7 @@
 							"cat_id" => (int)$line["cat_id"],
 							"last_updated" => strtotime($line["last_updated"])
 						);
-	
+
 					array_push($feeds, $row);
 				}
 			}
@@ -6593,15 +6749,16 @@
 	}
 
 	function api_get_headlines($link, $feed_id, $limit, $offset,
-					$filter, $is_cat, $show_excerpt, $show_content, $view_mode, $order) {
+				$filter, $is_cat, $show_excerpt, $show_content, $view_mode, $order,
+				$include_attachments) {
 
 			/* do not rely on params below */
 
 			$search = db_escape_string($_REQUEST["search"]);
 			$search_mode = db_escape_string($_REQUEST["search_mode"]);
 			$match_on = db_escape_string($_REQUEST["match_on"]);
-			
-			$qfh_ret = queryFeedHeadlines($link, $feed_id, $limit, 
+
+			$qfh_ret = queryFeedHeadlines($link, $feed_id, $limit,
 				$view_mode, $is_cat, $search, $search_mode, $match_on,
 				$order, $offset);
 
@@ -6611,7 +6768,7 @@
 			$headlines = array();
 
 			while ($line = db_fetch_assoc($result)) {
-				$is_updated = ($line["last_read"] == "" && 
+				$is_updated = ($line["last_read"] == "" &&
 					($line["unread"] != "t" && $line["unread"] != "1"));
 
 				$headline_row = array(
@@ -6626,6 +6783,10 @@
 						"feed_id" => $line["feed_id"],
 						"tags" => get_article_tags($link, $line["id"]),
 					);
+
+					if ($include_attachments)
+						$headline_row['attachments'] = get_article_enclosures($link,
+							$line['id']);
 
 				if ($show_excerpt) {
 					$excerpt = truncate_string(strip_tags($line["content_preview"]), 100);
@@ -6642,16 +6803,34 @@
 			return $headlines;
 	}
 
+	function generate_error_feed($link, $error) {
+		$reply = array();
+
+		$reply['headlines']['id'] = -6;
+		$reply['headlines']['is_cat'] = false;
+
+		$reply['headlines']['toolbar'] = '';
+		$reply['headlines']['content'] = "<div class='whiteBox'>". $error . "</div>";
+
+		$reply['headlines-info'] = array("count" => 0,
+			"vgroup_last_feed" => '',
+			"unread" => 0,
+			"disable_cache" => true);
+
+		return $reply;
+	}
+
+
 	function generate_dashboard_feed($link) {
-		print "<headlines id=\"-5\" is_cat=\"\">";
+		$reply = array();
 
-		print "<toolbar><![CDATA[]]></toolbar>";
+		$reply['headlines']['id'] = -5;
+		$reply['headlines']['is_cat'] = false;
 
-		print '<content><![CDATA[';
+		$reply['headlines']['toolbar'] = '';
+		$reply['headlines']['content'] = "<div class='whiteBox'>".__('No feed selected.');
 
-		print "<div class='whiteBox'>".__('No feed selected.');
-
-		print "<p class=\"small\"><span class=\"insensitive\">";
+		$reply['headlines']['content'] .= "<p class=\"small\"><span class=\"insensitive\">";
 
 		$result = db_query($link, "SELECT ".SUBSTRING_FOR_DATE."(MAX(last_updated), 1, 19) AS last_updated FROM ttrss_feeds
 			WHERE owner_uid = " . $_SESSION['uid']);
@@ -6659,7 +6838,7 @@
 		$last_updated = db_fetch_result($result, 0, "last_updated");
 		$last_updated = make_local_datetime($link, $last_updated, false);
 
-		printf(__("Feeds last updated at %s"), $last_updated);
+		$reply['headlines']['content'] .= sprintf(__("Feeds last updated at %s"), $last_updated);
 
 		$result = db_query($link, "SELECT COUNT(id) AS num_errors
 			FROM ttrss_feeds WHERE last_error != '' AND owner_uid = ".$_SESSION["uid"]);
@@ -6667,32 +6846,24 @@
 		$num_errors = db_fetch_result($result, 0, "num_errors");
 
 		if ($num_errors > 0) {
-			print "<br/>";
-			print "<a class=\"insensitive\" href=\"#\" onclick=\"showFeedsWithErrors()\">".
+			$reply['headlines']['content'] .= "<br/>";
+			$reply['headlines']['content'] .= "<a class=\"insensitive\" href=\"#\" onclick=\"showFeedsWithErrors()\">".
 				__('Some feeds have update errors (click for details)')."</a>";
 		}
-		print "</span></p>";
+		$reply['headlines']['content'] .= "</span></p>";
 
-		print "]]></content>";
-		print "</headlines>";
-
-		print "<headlines-info><![CDATA[";
-
-		$info = array("count" => 0,
+		$reply['headlines-info'] = array("count" => 0,
 			"vgroup_last_feed" => '',
 			"unread" => 0,
 			"disable_cache" => true);
 
-		print json_encode($info);
-
-		print "]]></headlines-info>";
-
+		return $reply;
 	}
 
 	function save_email_address($link, $email) {
 		// FIXME: implement persistent storage of emails
 
-		if (!$_SESSION['stored_emails']) 
+		if (!$_SESSION['stored_emails'])
 			$_SESSION['stored_emails'] = array();
 
 		if (!in_array($email, $_SESSION['stored_emails']))
@@ -6704,15 +6875,15 @@
 
 		$sql_is_cat = bool_to_sql_bool($is_cat);
 
-		$result = db_query($link, "SELECT access_key FROM ttrss_access_keys 
-			WHERE feed_id = '$feed_id'	AND is_cat = $sql_is_cat 
+		$result = db_query($link, "SELECT access_key FROM ttrss_access_keys
+			WHERE feed_id = '$feed_id'	AND is_cat = $sql_is_cat
 			AND owner_uid = " . $owner_uid);
 
 		if (db_num_rows($result) == 1) {
 			$key = db_escape_string(sha1(uniqid(rand(), true)));
 
 			db_query($link, "UPDATE ttrss_access_keys SET access_key = '$key'
-				WHERE feed_id = '$feed_id' AND is_cat = $sql_is_cat 
+				WHERE feed_id = '$feed_id' AND is_cat = $sql_is_cat
 				AND owner_uid = " . $owner_uid);
 
 			return $key;
@@ -6728,8 +6899,8 @@
 
 		$sql_is_cat = bool_to_sql_bool($is_cat);
 
-		$result = db_query($link, "SELECT access_key FROM ttrss_access_keys 
-			WHERE feed_id = '$feed_id'	AND is_cat = $sql_is_cat 
+		$result = db_query($link, "SELECT access_key FROM ttrss_access_keys
+			WHERE feed_id = '$feed_id'	AND is_cat = $sql_is_cat
 			AND owner_uid = " . $owner_uid);
 
 		if (db_num_rows($result) == 1) {
@@ -6737,7 +6908,7 @@
 		} else {
 			$key = db_escape_string(sha1(uniqid(rand(), true)));
 
-			$result = db_query($link, "INSERT INTO ttrss_access_keys 
+			$result = db_query($link, "INSERT INTO ttrss_access_keys
 				(access_key, feed_id, is_cat, owner_uid)
 				VALUES ('$key', '$feed_id', $sql_is_cat, '$owner_uid')");
 
@@ -6753,15 +6924,17 @@
 	 *
 	 * @return array Array of feeds. Key is the full URL, value the title
 	 */
-	function get_feeds_from_html($url)
+	function get_feeds_from_html($url, $login = false, $pass = false)
 	{
 		$url     = fix_url($url);
 		$baseUrl = substr($url, 0, strrpos($url, '/') + 1);
 
 		libxml_use_internal_errors(true);
 
+		$content = @fetch_file_contents($url, false, $login, $pass);
+
 		$doc = new DOMDocument();
-		$doc->loadHTMLFile($url);
+		$doc->loadHTML($content);
 		$xpath = new DOMXPath($doc);
 		$entries = $xpath->query('/html/head/link[@rel="alternate"]');
 		$feedUrls = array();
@@ -6787,8 +6960,9 @@
 	 *
 	 * @return boolean True if the URL contains HTML content
 	 */
-	function url_is_html($url) {
-		$content = substr(fetch_file_contents($url, false), 0, 1000);
+	function url_is_html($url, $login = false, $pass = false) {
+		$content = substr(fetch_file_contents($url, false, $login, $pass), 0, 1000);
+
 		if (stripos($content, '<html>') === false
 			&& stripos($content, '<html ') === false
 		) {
@@ -6803,7 +6977,7 @@
 		$result = db_query($link, "SELECT caption FROM ttrss_labels2
 			WHERE owner_uid = '".$_SESSION["uid"]."' ORDER BY caption");
 
-		print "<select default=\"$value\" name=\"" . htmlspecialchars($name) . 
+		print "<select default=\"$value\" name=\"" . htmlspecialchars($name) .
 			"\" $attributes onchange=\"labelSelectOnChange(this)\" >";
 
 		while ($line = db_fetch_assoc($result)) {
@@ -6822,70 +6996,73 @@
 
 	}
 
-	function print_article_enclosures($link, $id, $always_display_enclosures, 
+	function format_article_enclosures($link, $id, $always_display_enclosures,
 					$article_content) {
 
 		$result = get_article_enclosures($link, $id);
-	
+		$rv = '';
+
 		if (count($result) > 0) {
-	
+
 			$entries_html = array();
 			$entries = array();
-	
+
 			foreach ($result as $line) {
-	
+
 				$url = $line["content_url"];
 				$ctype = $line["content_type"];
-	
+
 				if (!$ctype) $ctype = __("unknown type");
-	
+
 #				$filename = substr($url, strrpos($url, "/")+1);
-	
+
 				$entry = format_inline_player($link, $url, $ctype);
-	
+
 #				$entry .= " <a target=\"_blank\" href=\"" . htmlspecialchars($url) . "\">" .
 #					$filename . " (" . $ctype . ")" . "</a>";
-	
+
 				array_push($entries_html, $entry);
-	
+
 				$entry = array();
-	
+
 				$entry["type"] = $ctype;
 				$entry["filename"] = $filename;
 				$entry["url"] = $url;
-	
+
 				array_push($entries, $entry);
 			}
-	
-			print "<div class=\"postEnclosures\">";
-	
+
+			$rv .= "<div class=\"postEnclosures\">";
+
 			if (!get_pref($link, "STRIP_IMAGES")) {
 				if ($always_display_enclosures ||
 							!preg_match("/<img/i", $article_content)) {
-								
+
 					foreach ($entries as $entry) {
-	
+
 						if (preg_match("/image/", $entry["type"]) ||
 								preg_match("/\.(jpg|png|gif|bmp)/i", $entry["filename"])) {
-	
-								print "<p><img
+
+								$rv .= "<p><img
 								alt=\"".htmlspecialchars($entry["filename"])."\"
 								src=\"" .htmlspecialchars($entry["url"]) . "\"/></p>";
 						}
 					}
 				}
 			}
-	
+
 			if (count($entries) == 1) {
-				print __("Attachment:") . " ";
+				$rv .= __("Attachment:") . " ";
 			} else {
-				print __("Attachments:") . " ";
+				$rv .= __("Attachments:") . " ";
 			}
-	
-			print join(", ", $entries_html);
-	
-			print "</div>";
+
+			$rv .= join(", ", $entries_html);
+
+			$rv .= "</div>";
 		}
+
+		return $rv;
 	}
 
 	function getLastArticleId($link) {
@@ -6914,7 +7091,7 @@
 	function rewrite_relative_url($url, $rel_url) {
 		if (strpos($rel_url, "://") !== false) {
 			return $rel_url;
-		} else if (strpos($rel_url, "/") === 0) 
+		} else if (strpos($rel_url, "/") === 0)
 		{
 			$parts = parse_url($url);
 			$parts['path'] = $rel_url;
@@ -6943,7 +7120,7 @@
 		$sphinxClient->SetServer('localhost', 9312);
 		$sphinxClient->SetConnectTimeout(1);
 
-		$sphinxClient->SetFieldWeights(array('title' => 70, 'content' => 30, 
+		$sphinxClient->SetFieldWeights(array('title' => 70, 'content' => 30,
 			'feed_title' => 20));
 
 		$sphinxClient->SetMatchMode(SPH_MATCH_EXTENDED2);
@@ -6951,7 +7128,7 @@
 		$sphinxClient->SetLimits($offset, $limit, 1000);
 		$sphinxClient->SetArrayResult(false);
 		$sphinxClient->SetFilter('owner_uid', array($_SESSION['uid']));
-		
+
 		$result = $sphinxClient->Query($query, SPHINX_INDEX);
 
 		$ids = array();
@@ -6979,11 +7156,11 @@
 		while ($limit > 0) {
 			$limit_part = 500;
 
-			$query = "SELECT ttrss_tags.id AS id 
-				FROM ttrss_tags, ttrss_user_entries, ttrss_entries 
+			$query = "SELECT ttrss_tags.id AS id
+				FROM ttrss_tags, ttrss_user_entries, ttrss_entries
 				WHERE post_int_id = int_id AND $interval_query AND
 				ref_id = ttrss_entries.id AND tag_cache != '' LIMIT $limit_part";
-	
+
 			$result = db_query($link, $query);
 
 			$ids = array();
@@ -7035,7 +7212,7 @@
 		$obj = array();
 		$feed_id = (int) $feed_id;
 
-		if (!$title) 
+		if (!$title)
 			$title = getFeedTitle($link, $feed_id, false);
 
 		if ($unread === false)
@@ -7053,25 +7230,49 @@
 		return $obj;
 	}
 
+
 	function fetch_twitter_rss($link, $url, $owner_uid) {
-		$result = db_query($link, "SELECT twitter_oauth FROM ttrss_users 
+		$result = db_query($link, "SELECT twitter_oauth FROM ttrss_users
 			WHERE id = $owner_uid");
 
 		$access_token = json_decode(db_fetch_result($result, 0, 'twitter_oauth'), true);
+		$url_escaped = db_escape_string($url);
 
 		if ($access_token) {
-	
-			/* Create a TwitterOauth object with consumer/user tokens. */
-			$connection = new TwitterOAuth(CONSUMER_KEY, CONSUMER_SECRET, $access_token['oauth_token'], $access_token['oauth_token_secret']);
-	
-			/* If method is set change API call made. Test is called by default. */
-			$content = $connection->get($url);
 
-			$rss = new MagpieRSS($content, MAGPIE_OUTPUT_ENCODING, 
-				MAGPIE_INPUT_ENCODING, MAGPIE_DETECT_ENCODING );
+			$tmhOAuth = new tmhOAuth(array(
+				'consumer_key'    => CONSUMER_KEY,
+				'consumer_secret' => CONSUMER_SECRET,
+				'user_token' => $access_token['oauth_token'],
+				'user_secret' => $access_token['oauth_token_secret'],
+			));
 
-			return $rss;
+			$code = $tmhOAuth->request('GET', $url);
+
+			if ($code == 200) {
+
+				$content = $tmhOAuth->response['response'];
+
+				define('MAGPIE_CACHE_ON', false);
+
+				$rss = new MagpieRSS($content, MAGPIE_OUTPUT_ENCODING,
+					MAGPIE_INPUT_ENCODING, MAGPIE_DETECT_ENCODING );
+
+				return $rss;
+
+			} else {
+
+				db_query($link, "UPDATE ttrss_feeds
+					SET last_error = 'OAuth authorization failed ($code).'
+					WHERE feed_url = '$url_escaped' AND owner_uid = $owner_uid");
+			}
+
 		} else {
+
+			db_query($link, "UPDATE ttrss_feeds
+				SET last_error = 'OAuth information not found.'
+				WHERE feed_url = '$url_escaped' AND owner_uid = $owner_uid");
+
 			return false;
 		}
 	}
@@ -7092,10 +7293,155 @@
 
 		$urls = null;
 
-		$result = preg_replace("/((?<!=.)((http|https|ftp)+):\/\/[^ ,!]+)/i", 
+		$result = preg_replace("/((?<!=.)((http|https|ftp)+):\/\/[^ ,!]+)/i",
 			"<a target=\"_blank\" href=\"\\1\">\\1</a>", $line);
 
 		return $result;
 	}
 
+	function filter_to_sql($filter) {
+		$query = "";
+
+		if (DB_TYPE == "pgsql")
+			$reg_qpart = "~";
+		else
+			$reg_qpart = "REGEXP";
+
+		switch ($filter["type"]) {
+			case "title":
+				$query = "LOWER(ttrss_entries.title) $reg_qpart LOWER('".
+					$filter['reg_exp'] . "')";
+				break;
+			case "content":
+				$query = "LOWER(ttrss_entries.content) $reg_qpart LOWER('".
+					$filter['reg_exp'] . "')";
+				break;
+			case "both":
+				$query = "LOWER(ttrss_entries.title) $reg_qpart LOWER('".
+					$filter['reg_exp'] . "') OR LOWER(" .
+					"ttrss_entries.content) $reg_qpart LOWER('" . $filter['reg_exp'] . "')";
+				break;
+			case "tag":
+				$query = "LOWER(ttrss_user_entries.tag_cache) $reg_qpart LOWER('".
+					$filter['reg_exp'] . "')";
+				break;
+			case "link":
+				$query = "LOWER(ttrss_entries.link) $reg_qpart LOWER('".
+					$filter['reg_exp'] . "')";
+				break;
+			case "date":
+
+				if ($filter["filter_param"] == "before")
+					$cmp_qpart = "<";
+				else
+					$cmp_qpart = ">=";
+
+				$timestamp = date("Y-m-d H:N:s", strtotime($filter["reg_exp"]));
+				$query = "ttrss_entries.date_entered $cmp_qpart '$timestamp'";
+				break;
+			case "author":
+				$query = "LOWER(ttrss_entries.author) $reg_qpart LOWER('".
+					$filter['reg_exp'] . "')";
+				break;
+		}
+
+		if ($filter["inverse"])
+			$query = "NOT ($query)";
+
+		if ($query) {
+			if (DB_TYPE == "pgsql") {
+				$query = " ($query) AND ttrss_entries.date_entered > NOW() - INTERVAL '14 days'";
+			} else {
+				$query = " ($query) AND ttrss_entries.date_entered > DATE_SUB(NOW(), INTERVAL 14 DAY)";
+			}
+			$query .= " AND ";
+		}
+
+
+		return $query;
+	}
+
+	// Status codes:
+	// -1  - never connected
+	// 0   - no data received
+	// 1   - data received successfully
+	// 2   - did not receive valid data
+	// >10 - server error, code + 10 (e.g. 16 means server error 6)
+
+	function get_linked_feeds($link, $instance_id = false) {
+		if ($instance_id)
+			$instance_qpart = "id = '$instance_id' AND ";
+		else
+			$instance_qpart = "";
+
+		if (DB_TYPE == "pgsql") {
+			$date_qpart = "last_connected < NOW() - INTERVAL '6 hours'";
+		} else {
+			$date_qpart = "last_connected < DATE_SUB(NOW(), INTERVAL 6 HOUR)";
+		}
+
+		$result = db_query($link, "SELECT id, access_key, access_url FROM ttrss_linked_instances
+			WHERE $instance_qpart $date_qpart ORDER BY last_connected");
+
+		while ($line = db_fetch_assoc($result)) {
+			$id = $line['id'];
+
+			_debug("Updating: " . $line['access_url'] . " ($id)");
+
+			$fetch_url = $line['access_url'] . '/backend.php?op=fbexport';
+			$post_query = 'key=' . $line['access_key'];
+
+			$feeds = fetch_file_contents($fetch_url, false, false, false, $post_query);
+
+			if ($feeds) {
+				$feeds = json_decode($feeds, true);
+
+				if ($feeds) {
+					if ($feeds['error']) {
+						$status = $feeds['error']['code'] + 10;
+					} else {
+						$status = 1;
+
+						if (count($feeds['feeds']) > 0) {
+
+							db_query($link, "DELETE FROM ttrss_linked_feeds
+								WHERE instance_id = '$id'");
+
+							foreach ($feeds['feeds'] as $feed) {
+								$feed_url = db_escape_string($feed['feed_url']);
+								$title = db_escape_string($feed['title']);
+								$subscribers = db_escape_string($feed['subscribers']);
+								$site_url = db_escape_string($feed['site_url']);
+
+								db_query($link, "INSERT INTO ttrss_linked_feeds
+									(feed_url, site_url, title, subscribers, instance_id, created, updated)
+								VALUES
+									('$feed_url', '$site_url', '$title', '$subscribers', '$id', NOW(), NOW())");
+							}
+						} else {
+							// received 0 feeds, this might indicate that
+							// the instance on the other hand is rebuilding feedbrowser cache
+							// we will try again later
+
+							// TODO: maybe perform expiration based on updated here?
+						}
+
+						_debug("Processed " . count($feeds['feeds']) . " feeds.");
+					}
+				} else {
+					$status = 2;
+				}
+
+			} else {
+				$status = 0;
+			}
+
+			_debug("Status: $status");
+
+			db_query($link, "UPDATE ttrss_linked_instances SET
+				last_status_out = '$status', last_connected = NOW() WHERE id = '$id'");
+
+		}
+
+	}
 ?>

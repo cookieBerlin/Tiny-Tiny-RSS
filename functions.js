@@ -33,21 +33,55 @@ function exception_error(location, e, ext_info) {
 		var content = "<div class=\"fatalError\">" +
 			"<pre>" + msg + "</pre>";
 
+		content += "<form name=\"exceptionForm\" id=\"exceptionForm\" target=\"_blank\" "+
+		  "action=\"http://tt-rss.org/report.php\" method=\"POST\">";
+
+		content += "<textarea style=\"display : none\" name=\"message\">" + msg + "</textarea>";
+		content += "<textarea style=\"display : none\" name=\"params\">N/A</textarea>";
+
 		if (ext_info) {
 			content += "<div><b>Additional information:</b></div>" +
-			"<textarea readonly=\"1\">" + ext_info + "</textarea>";
+			"<textarea name=\"xinfo\" readonly=\"1\">" + ext_info + "</textarea>";
 		}
 
 		content += "<div><b>Stack trace:</b></div>" +
-			"<textarea readonly=\"1\">" + e.stack + "</textarea>";
+			"<textarea name=\"stack\" readonly=\"1\">" + e.stack + "</textarea>";
+
+		content += "</form>";
 
 		content += "</div>";
 
-		// TODO: add code to automatically report errors to tt-rss.org
+		content += "<div class='dlgButtons'>";
+
+		content += "<button dojoType=\"dijit.form.Button\""+
+				"onclick=\"dijit.byId('exceptionDlg').report()\">" +
+				__('Report to tt-rss.org') + "</button> ";
+		content += "<button dojoType=\"dijit.form.Button\" "+
+				"onclick=\"dijit.byId('exceptionDlg').hide()\">" +
+				__('Close') + "</button>";
+		content += "</div>";
+
+		if (dijit.byId("exceptionDlg"))
+			dijit.byId("exceptionDlg").destroyRecursive();
 
 		var dialog = new dijit.Dialog({
+			id: "exceptionDlg",
 			title: "Unhandled exception",
 			style: "width: 600px",
+			report: function() {
+				if (confirm(__("Are you sure to report this exception to tt-rss.org? The report will include your browser information. Your IP would be saved in the database."))) {
+
+					document.forms['exceptionForm'].params.value = $H({
+						browserName: navigator.appName,
+						browserVersion: navigator.appVersion,
+						browserPlatform: navigator.platform,
+						browserCookies: navigator.cookieEnabled,
+					}).toQueryString();
+
+					document.forms['exceptionForm'].submit();
+
+				}
+			},
 			content: content});
 
 		dialog.show();
@@ -63,8 +97,8 @@ function format_exception_error(location, e) {
 
 	if (e.fileName) {
 		var base_fname = e.fileName.substring(e.fileName.lastIndexOf("/") + 1);
-	
-		msg = "Exception: " + e.name + ", " + e.message + 
+
+		msg = "Exception: " + e.name + ", " + e.message +
 			"\nFunction: " + location + "()" +
 			"\nLocation: " + base_fname + ":" + e.lineNumber;
 
@@ -81,14 +115,14 @@ function format_exception_error(location, e) {
 
 function param_escape(arg) {
 	if (typeof encodeURIComponent != 'undefined')
-		return encodeURIComponent(arg);	
+		return encodeURIComponent(arg);
 	else
 		return escape(arg);
 }
 
 function param_unescape(arg) {
 	if (typeof decodeURIComponent != 'undefined')
-		return decodeURIComponent(arg);	
+		return decodeURIComponent(arg);
 	else
 		return unescape(arg);
 }
@@ -100,7 +134,7 @@ function hide_notify() {
 	if (n) {
 		n.style.display = "none";
 	}
-} 
+}
 
 function notify_silent_next() {
 	notify_silent = true;
@@ -184,16 +218,16 @@ function notify_info(msg, no_hide) {
 }
 
 function setCookie(name, value, lifetime, path, domain, secure) {
-	
+
 	var d = false;
-	
+
 	if (lifetime) {
 		d = new Date();
 		d.setTime(d.getTime() + (lifetime * 1000));
 	}
 
 	console.log("setCookie: " + name + " => " + value + ": " + d);
-	
+
 	int_setCookie(name, value, d, path, domain, secure);
 
 }
@@ -214,7 +248,7 @@ function delCookie(name, path, domain) {
 		";expires=Thu, 01-Jan-1970 00:00:01 GMT";
 	}
 }
-		
+
 
 function getCookie(name) {
 
@@ -252,10 +286,10 @@ function gotoExportOpml() {
   * * @author Sundar Dorai-Raj
   * * Email: sdoraira@vt.edu
   * * This program is free software; you can redistribute it and/or
-  * * modify it under the terms of the GNU General Public License 
-  * * as published by the Free Software Foundation; either version 2 
-  * * of the License, or (at your option) any later version, 
-  * * provided that any use properly credits the author. 
+  * * modify it under the terms of the GNU General Public License
+  * * as published by the Free Software Foundation; either version 2
+  * * of the License, or (at your option) any later version,
+  * * provided that any use properly credits the author.
   * * This program is distributed in the hope that it will be useful,
   * * but WITHOUT ANY WARRANTY; without even the implied warranty of
   * * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
@@ -341,29 +375,9 @@ function dropboxSelect(e, v) {
 	}
 }
 
-// originally stolen from http://www.11tmr.com/11tmr.nsf/d6plinks/MWHE-695L9Z
-// bugfixed just a little bit :-)
-function getURLParam(strParamName){
-  var strReturn = "";
-  var strHref = window.location.href;
-
-  if (strHref.indexOf("#") == strHref.length-1) {
-		strHref = strHref.substring(0, strHref.length-1);
-  }
-
-  if ( strHref.indexOf("?") > -1 ){
-    var strQueryString = strHref.substr(strHref.indexOf("?"));
-    var aQueryString = strQueryString.split("&");
-    for ( var iParam = 0; iParam < aQueryString.length; iParam++ ){
-      if (aQueryString[iParam].indexOf(strParamName + "=") > -1 ){
-        var aParam = aQueryString[iParam].split("=");
-        strReturn = aParam[1];
-        break;
-      }
-    }
-  }
-  return strReturn;
-} 
+function getURLParam(param){
+	return String(window.location.href).parseQuery()[param];
+}
 
 function leading_zero(p) {
 	var s = String(p);
@@ -440,7 +454,7 @@ function infobox_callback2(transport) {
 			title = title.firstChild.nodeValue;
 
 		var content = transport.responseXML.getElementsByTagName("content")[0];
-		
+
 		content = content.firstChild.nodeValue;
 
 		if (!dialog) {
@@ -501,39 +515,45 @@ function setInitParam(key, value) {
 }
 
 function fatalError(code, msg, ext_info) {
-	try {	
-
-		if (!ext_info) ext_info = "N/A";
+	try {
 
 		if (code == 6) {
-			window.location.href = "tt-rss.php";			
+			window.location.href = "tt-rss.php";
 		} else if (code == 5) {
 			window.location.href = "db-updater.php";
 		} else {
-	
+
 			if (msg == "") msg = "Unknown error";
 
-			var ebc = $("xebContent");
-	
-			if (ebc) {
-	
-				Element.show("dialog_overlay");
-				Element.show("errorBoxShadow");
-				Element.hide("xebBtn");
-
-				if (ext_info) {
-					if (ext_info.responseText) {
-						ext_info = ext_info.responseText;
-					}
+			if (ext_info) {
+				if (ext_info.responseText) {
+					ext_info = ext_info.responseText;
 				}
-	
-				ebc.innerHTML = 
-					"<div><b>Error message:</b></div>" +
-					"<pre>" + msg + "</pre>" +
-					"<div><b>Additional information:</b></div>" +
-					"<textarea readonly=\"1\">" + ext_info + "</textarea>";
 			}
+
+			if (ERRORS && ERRORS[code] && !msg) {
+				msg = ERRORS[code];
+			}
+
+			var content = "<div><b>Error code:</b> " + code + "</div>" +
+				"<p>" + msg + "</p>";
+
+			if (ext_info) {
+				content = content + "<div><b>Additional information:</b></div>" +
+					"<textarea style='width: 100%' readonly=\"1\">" +
+					ext_info + "</textarea>";
+			}
+
+			var dialog = new dijit.Dialog({
+				title: "Fatal error",
+				style: "width: 600px",
+				content: content});
+
+			dialog.show();
+
 		}
+
+		return false;
 
 	} catch (e) {
 		exception_error("fatalError", e);
@@ -605,12 +625,12 @@ function filterDlgCheckDate() {
 
 		new Ajax.Request("backend.php", {
 			parameters: query,
-			onComplete: function(transport) { 
+			onComplete: function(transport) {
 
 				var reply = JSON.parse(transport.responseText);
 
 				if (reply['result'] == true) {
-					alert(__("Date syntax appears to be correct."));
+					alert(__("Date syntax appears to be correct:") + " " + reply['date']);
 					return;
 				} else {
 					alert(__("Date syntax is incorrect."));
@@ -632,7 +652,7 @@ function displayHelpInfobox(topic_id) {
 
 	var url = "backend.php?op=help&tid=" + param_escape(topic_id);
 
-	var w = window.open(url, "ttrss_help", 
+	var w = window.open(url, "ttrss_help",
 		"status=0,toolbar=0,location=0,width=450,height=500,scrollbars=1,menubar=0");
 
 }
@@ -758,14 +778,14 @@ function removeFeedIcon(id) {
 
 			new Ajax.Request("backend.php", {
 				parameters: query,
-				onComplete: function(transport) { 
+				onComplete: function(transport) {
 					notify_info("Feed icon removed.");
 					if (inPreferences()) {
 						updateFeedList();
 					} else {
 						setTimeout('updateFeedList(false, false)', 50);
 					}
-				} }); 
+				} });
 		}
 
 		return false;
@@ -803,13 +823,13 @@ function addLabel(select, callback) {
 		var caption = prompt(__("Please enter label caption:"), "");
 
 		if (caption != undefined) {
-	
+
 			if (caption == "") {
 				alert(__("Can't create label: missing caption."));
 				return false;
 			}
 
-			var query = "?op=pref-labels&subop=add&caption=" + 
+			var query = "?op=pref-labels&subop=add&caption=" +
 				param_escape(caption);
 
 			if (select)
@@ -821,7 +841,7 @@ function addLabel(select, callback) {
 
 			new Ajax.Request("backend.php", {
 				parameters: query,
-				onComplete: function(transport) { 
+				onComplete: function(transport) {
 					if (callback) {
 						callback(transport);
 					} else if (inPreferences()) {
@@ -859,22 +879,22 @@ function quickAddFeed() {
 
 					new Ajax.Request("backend.php", {
 						parameters: dojo.objectToQuery(this.attr('value')),
-						onComplete: function(transport) { 
+						onComplete: function(transport) {
 							try {
 
 								var reply = JSON.parse(transport.responseText);
-				
+
 								var rc = parseInt(reply['result']);
-					
+
 								notify('');
 
 								console.log("GOT RC: " + rc);
-					
+
 								switch (rc) {
 								case 1:
 									dialog.hide();
 									notify_info(__("Subscribed to %s").replace("%s", feed_url));
-					
+
 									updateFeedList();
 									break;
 								case 2:
@@ -910,9 +930,9 @@ function quickAddFeed() {
 											}
 
 //											if (count > 5) count = 5;
-//											select.size = count; 
-					
-											Effect.Appear('feedDlg_feedsContainer', {duration : 0.5}); 
+//											select.size = count;
+
+											Effect.Appear('feedDlg_feedsContainer', {duration : 0.5});
 										}
 									});
 									break;
@@ -923,11 +943,11 @@ function quickAddFeed() {
 									alert(__("You are already subscribed to this feed."));
 									break;
 								}
-				
+
 							} catch (e) {
-								exception_error("subscribeToFeed", e);
+								exception_error("subscribeToFeed", e, transport);
 							}
-				
+
 						} });
 
 					}
@@ -951,10 +971,28 @@ function quickAddFilter() {
 			id: "filterEditDlg",
 			title: __("Create Filter"),
 			style: "width: 600px",
+			test: function() {
+				if (this.validate()) {
+
+					if (dijit.byId("filterTestDlg"))
+						dijit.byId("filterTestDlg").destroyRecursive();
+
+					tdialog = new dijit.Dialog({
+						id: "filterTestDlg",
+						title: __("Filter Test Results"),
+						style: "width: 600px",
+						href: "backend.php?savemode=test&" +
+							dojo.objectToQuery(dialog.attr('value')),
+						});
+
+					tdialog.show();
+
+				}
+			},
 			execute: function() {
 				if (this.validate()) {
 
-					var query = "?op=rpc&subop=verifyRegexp&reg_exp=" + 
+					var query = "?op=rpc&subop=verifyRegexp&reg_exp=" +
 						param_escape(dialog.attr('value').reg_exp);
 
 					notify_progress("Verifying regular expression...");
@@ -962,7 +1000,7 @@ function quickAddFilter() {
 					new Ajax.Request("backend.php",	{
 						parameters: query,
 						onComplete: function(transport) {
-							var reply = JSON.parse(transport.responseText);	
+							var reply = JSON.parse(transport.responseText);
 
 							if (reply) {
 								notify('');
@@ -981,10 +1019,10 @@ function quickAddFilter() {
 											dialog.hide();
 											notify_info(transport.responseText);
 											if (inPreferences()) {
-												updateFilterList();				
+												updateFilterList();
 											}
 									}})
-								}	
+								}
 							}
 					}});
 				}
@@ -996,6 +1034,27 @@ function quickAddFilter() {
 		exception_error("quickAddFilter", e);
 	}
 }
+
+function resetPubSub(feed_id, title) {
+
+	var msg = __("Reset subscription? Tiny Tiny RSS will try to subscribe to the notification hub again on next feed update.").replace("%s", title);
+
+	if (title == undefined || confirm(msg)) {
+		notify_progress("Loading, please wait...");
+
+		var query = "?op=pref-feeds&quiet=1&subop=resetPubSub&ids=" + feed_id;
+
+		new Ajax.Request("backend.php", {
+			parameters: query,
+			onComplete: function(transport) {
+				dijit.byId("pubsubReset_Btn").attr('disabled', true);
+				notify_info("Subscription reset.");
+			} });
+	}
+
+	return false;
+}
+
 
 function unsubscribeFeed(feed_id, title) {
 
@@ -1011,9 +1070,9 @@ function unsubscribeFeed(feed_id, title) {
 			onComplete: function(transport) {
 
 					if (dijit.byId("feedEditDlg")) dijit.byId("feedEditDlg").hide();
-		
+
 					if (inPreferences()) {
-						updateFeedList();				
+						updateFeedList();
 					} else {
 						if (feed_id == getActiveFeedId())
 							setTimeout("viewfeed(-5)", 100);
@@ -1037,35 +1096,25 @@ function backend_sanity_check_callback(transport) {
 			return;
 		}
 
-		if (!transport.responseXML) {
-			if (!store) {
-				fatalError(3, "Sanity check: Received reply is not XML", 
-					transport.responseText);
-				return;
-			}
-		}
-
-		var reply = transport.responseXML.getElementsByTagName("error")[0];
+		var reply = JSON.parse(transport.responseText);
 
 		if (!reply) {
 			fatalError(3, "Sanity check: invalid RPC reply", transport.responseText);
 			return;
 		}
 
-		var error_code = reply.getAttribute("error-code");
-	
+		var error_code = reply['error']['code'];
+
 		if (error_code && error_code != 0) {
-			return fatalError(error_code, reply.getAttribute("error-msg"));
+			return fatalError(error_code, reply['error']['message']);
 		}
 
 		console.log("sanity check ok");
 
-		var params = transport.responseXML.getElementsByTagName("init-params")[0];
+		var params = reply['init-params'];
 
 		if (params) {
 			console.log('reading init-params...');
-
-			params = JSON.parse(params.firstChild.nodeValue);
 
 			if (params) {
 				for (k in params) {
@@ -1082,8 +1131,8 @@ function backend_sanity_check_callback(transport) {
 		init_second_stage();
 
 	} catch (e) {
-		exception_error("backend_sanity_check_callback", e, transport);	
-	} 
+		exception_error("backend_sanity_check_callback", e, transport);
+	}
 }
 
 function has_local_storage() {
@@ -1091,7 +1140,7 @@ function has_local_storage() {
 		return 'sessionStorage' in window && window['sessionStorage'] != null;
 	} catch (e) {
 		return false;
-	} 
+	}
 }
 
 function catSelectOnChange(elem) {
@@ -1148,12 +1197,12 @@ function genUrlChangeKey(feed, is_cat) {
 
 	try {
 		var ok = confirm(__("Generate new syndication address for this feed?"));
-	
+
 		if (ok) {
-	
+
 			notify_progress("Trying to change address...", true);
-	
-			var query = "?op=rpc&subop=regenFeedKey&id=" + param_escape(feed) + 
+
+			var query = "?op=rpc&subop=regenFeedKey&id=" + param_escape(feed) +
 				"&is_cat=" + param_escape(is_cat);
 
 			new Ajax.Request("backend.php", {
@@ -1161,21 +1210,21 @@ function genUrlChangeKey(feed, is_cat) {
 				onComplete: function(transport) {
 						var reply = JSON.parse(transport.responseText);
 						var new_link = reply.link;
-	
+
 						var e = $('gen_feed_url');
-	
+
 						if (new_link) {
-							
-							e.innerHTML = e.innerHTML.replace(/\&amp;key=.*$/, 
+
+							e.innerHTML = e.innerHTML.replace(/\&amp;key=.*$/,
 								"&amp;key=" + new_link);
 
-							e.href = e.href.replace(/\&amp;key=.*$/,
-								"&amp;key=" + new_link);
+							e.href = e.href.replace(/\&key=.*$/,
+								"&key=" + new_link);
 
 							new Effect.Highlight(e);
 
 							notify('');
-	
+
 						} else {
 							notify_error("Could not change feed URL.");
 						}
@@ -1271,7 +1320,7 @@ function selectTableRows(id, mode) {
 				for (var j = 0; j < inputs.length; j++) {
 					var input = inputs[j];
 
-					if (input.getAttribute("type") == "checkbox" && 
+					if (input.getAttribute("type") == "checkbox" &&
 							input.id.match(bare_id)) {
 
 						cb = input;
@@ -1383,98 +1432,120 @@ function feedBrowser() {
 			id: "feedBrowserDlg",
 			title: __("More Feeds"),
 			style: "width: 600px",
-			getSelectedFeeds: function() {
+			getSelectedFeedIds: function() {
 				var list = $$("#browseFeedList li[id*=FBROW]");
 				var selected = new Array();
-			
-				list.each(function(child) {	
+
+				list.each(function(child) {
 					var id = child.id.replace("FBROW-", "");
-			
+
 					if (child.hasClassName('Selected')) {
 						selected.push(id);
-					}	
+					}
 				});
-			
+
 				return selected;
 			},
+			getSelectedFeeds: function() {
+				var list = $$("#browseFeedList li.Selected");
+				var selected = new Array();
+
+				list.each(function(child) {
+					var title = child.getElementsBySelector("span.fb_feedTitle")[0].innerHTML;
+					var url = child.getElementsBySelector("a.fb_feedUrl")[0].href;
+
+					selected.push([title,url]);
+
+				});
+
+				return selected;
+			},
+
 			subscribe: function() {
-				var selected = this.getSelectedFeeds();
 				var mode = this.attr('value').mode;
-		
+				var selected = [];
+
+				if (mode == "1")
+					selected = this.getSelectedFeeds();
+				else
+					selected = this.getSelectedFeedIds();
+
 				if (selected.length > 0) {
 					dijit.byId("feedBrowserDlg").hide();
-		
+
 					notify_progress("Loading, please wait...", true);
-		
-					var query = "?op=rpc&subop=massSubscribe&ids="+
-						param_escape(selected.toString()) + "&mode=" + param_escape(mode);
+
+					// we use dojo.toJson instead of JSON.stringify because
+					// it somehow escapes everything TWICE, at least in Chrome 9
+
+					var query = "?op=rpc&subop=massSubscribe&payload="+
+						param_escape(dojo.toJson(selected)) + "&mode=" + param_escape(mode);
 
 					console.log(query);
-		
+
 					new Ajax.Request("backend.php", {
 						parameters: query,
-						onComplete: function(transport) { 
-							if (inPreferences()) {
-								updateFeedList();
-							}
+						onComplete: function(transport) {
+							notify('');
+							updateFeedList();
 						} });
-		
+
 				} else {
 					alert(__("No feeds are selected."));
 				}
-		
+
 			},
 			update: function() {
 				var query = dojo.objectToQuery(dialog.attr('value'));
-		
+
 				Element.show('feed_browser_spinner');
-		
+
 				new Ajax.Request("backend.php", {
 					parameters: query,
-					onComplete: function(transport) { 
+					onComplete: function(transport) {
 						notify('');
-		
+
 						Element.hide('feed_browser_spinner');
-		
+
 						var c = $("browseFeedList");
 
 						var reply = JSON.parse(transport.responseText);
 
 						var r = reply['content'];
 						var mode = reply['mode'];
-		
+
 						if (c && r) {
 							c.innerHTML = r;
 						}
-		
+
 						dojo.parser.parse("browseFeedList");
-		
+
 						if (mode == 2) {
 							Element.show(dijit.byId('feed_archive_remove').domNode);
 						} else {
 							Element.hide(dijit.byId('feed_archive_remove').domNode);
 						}
-			
+
 					} });
 			},
 			removeFromArchive: function() {
 				var selected = this.getSelectedFeeds();
-		
+
 				if (selected.length > 0) {
-		
+
 					var pr = __("Remove selected feeds from the archive? Feeds with stored articles will not be removed.");
-		
+
 					if (confirm(pr)) {
 						Element.show('feed_browser_spinner');
-		
-						var query = "?op=rpc&subop=remarchived&ids=" + 
+
+						var query = "?op=rpc&subop=remarchived&ids=" +
 							param_escape(selected.toString());;
-		
+
 						new Ajax.Request("backend.php", {
 							parameters: query,
-							onComplete: function(transport) { 
+							onComplete: function(transport) {
 								dialog.update();
-							} }); 
+							} });
 					}
 				}
 			},
@@ -1490,6 +1561,61 @@ function feedBrowser() {
 	} catch (e) {
 		exception_error("editFeed", e);
 	}
+}
+
+function showFeedsWithErrors() {
+	try {
+		var query = "backend.php?op=dlg&id=feedsWithErrors";
+
+		if (dijit.byId("errorFeedsDlg"))
+			dijit.byId("errorFeedsDlg").destroyRecursive();
+
+		dialog = new dijit.Dialog({
+			id: "errorFeedsDlg",
+			title: __("Feeds with update errors"),
+			style: "width: 600px",
+			getSelectedFeeds: function() {
+				return getSelectedTableRowIds("prefErrorFeedList");
+			},
+			removeSelected: function() {
+				var sel_rows = this.getSelectedFeeds();
+
+				console.log(sel_rows);
+
+				if (sel_rows.length > 0) {
+					var ok = confirm(__("Remove selected feeds?"));
+
+					if (ok) {
+						notify_progress("Removing selected feeds...", true);
+
+						var query = "?op=pref-feeds&subop=remove&ids="+
+							param_escape(sel_rows.toString());
+
+						new Ajax.Request("backend.php",	{
+							parameters: query,
+							onComplete: function(transport) {
+								notify('');
+								dialog.hide();
+								updateFeedList();
+							} });
+					}
+
+				} else {
+					alert(__("No feeds are selected."));
+				}
+			},
+			execute: function() {
+				if (this.validate()) {
+				}
+			},
+			href: query});
+
+		dialog.show();
+
+	} catch (e) {
+		exception_error("showFeedsWithErrors", e);
+	}
+
 }
 
 

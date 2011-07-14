@@ -76,17 +76,17 @@ div.postReply img.tagsPic {
 
 div.articleNote {
 	background-color : #fff7d5;
-	border-width : 1px;
 	padding : 5px;
-	border-style : dashed;
+	border-style : none none dashed none;
 	border-color : #e7d796;
-	font-size : 11px;
-	margin-left : 5px;
-	margin-top : 5px;
-	float : right;
+	border-width : 1px;
+	background-color : #fff7d5;
 	color : #9a8c59;
-	max-width : 150px;
-	text-align : justify;
+}
+
+div.articleNote div.noteEdit {
+	float : right;
+	cursor : pointer;
 }
 
 div.postReply span.author {
@@ -350,7 +350,11 @@ table.prefUserList tr.oddSelected,
 table.prefFeedList tr.even,
 table.prefFeedList tr.odd,
 table.prefFeedList tr.evenSelected,
-table.prefFeedList tr.oddSelected
+table.prefFeedList tr.oddSelected,
+table.prefInstanceList tr.even,
+table.prefInstanceList tr.odd,
+table.prefInstanceList tr.evenSelected,
+table.prefInstanceList tr.oddSelected
 {	
 	cursor : pointer;
 }
@@ -370,7 +374,11 @@ table.prefUserList tr.oddSelected:hover td,
 table.prefFeedList tr.even:hover td, 
 table.prefFeedList tr.odd:hover td,
 table.prefFeedList tr.evenSelected:hover td, 
-table.prefFeedList tr.oddSelected:hover td
+table.prefFeedList tr.oddSelected:hover td,
+table.prefInstanceList tr.even:hover td, 
+table.prefInstanceList tr.odd:hover td,
+table.prefInstanceList tr.evenSelected:hover td, 
+table.prefInstanceList tr.oddSelected:hover td
 {
 	color : #88b0f0;
 }
@@ -383,7 +391,7 @@ table.prefFeedList td.feedSelect {
 	text-align : center;
 }
 
-div.prefFeedCatHolder, div.prefFeedOPMLHolder {
+div.prefFeedCatHolder, div.prefFeedOPMLHolder, div.inactiveFeedHolder {
 	height : 300px;
 	overflow : auto;
 	border-width : 0px 1px 1px 1px;
@@ -393,7 +401,7 @@ div.prefFeedCatHolder, div.prefFeedOPMLHolder {
 	background-color : #ecf4ff;
 }
 
-div.prefFeedOPMLHolder {
+div.prefFeedOPMLHolder, div.inactiveFeedHolder {
 	border-width : 1px 1px 1px 1px;
 }
 
@@ -433,59 +441,6 @@ a.helpLink:hover {
 	padding : 0px;
 	font-size : 12px;
 }
-
-/*
-div.firstTab {
-	width : 10px;
-	float : left;
-}
-
-div.prefsTab:hover {
-	cursor : pointer;
-}
-
-div.prefsTab.Selected:hover {
-	cursor : pointer;
-}
-
-div.prefsTab {
-	float : left;
-	border-width : 1px 1px 0px 1px;
-	border-color : #C4D1E4;
-	border-style : solid;
-	margin : 0px 0px 0px 5px;
-	padding : 3px 5px 3px 5px;
-	font-size : 12px;
-	font-family : "Lucida Grande", "Segoe UI", Tahoma, Arial, sans-serif;
-	border-collapse : collapse;
-	min-width : 100px;
-	text-align : center;
-	cursor : pointer;
-	position : relative;
-	bottom : -1px;
-	height : 30px;
-}
-
-div.prefsTab.Selected {
-	float : left;
-	border-width : 1px 1px 0px 1px;
-	border-color : #88b0f0;
-	border-style : solid;
-	margin : 0px 0px 0px 5px;
-	padding : 3px 5px 3px 5px;
-	background-color : #ecf4ff;
-	font-size : 12px;
-	font-family : "Lucida Grande", "Segoe UI", Tahoma, Arial, sans-serif;
-	border-collapse : collapse;
-	font-weight : bold;
-	min-width : 100px;
-	text-align : center;
-	cursor : pointer;
-	position : relative;
-	bottom : -1px;
-	z-index : 3;
-	height : 30px;
-} */
 
 div.notice {
 	background : #ffffff;
@@ -568,7 +523,7 @@ td.selectPrompt {
 }
 
 div#headlines-toolbar {
-	border-width : 1px 0px 1px 0px;
+	border-width : 0px 0px 1px 0px;
 	background-color : #ecf4ff;
 	border-color : #88b0f0 #88b0f0 #ecf4ff #88b0f0;
 	font-size : 11px;
@@ -961,46 +916,6 @@ html, body#ttrssPrefs, #main {
 
 /* preferences layout */
 
-/* #prefFooter {
-	position : absolute;
-	bottom : 0px;
-	height : 20px;
-	text-align : center;
-	color : gray;
-	font-size : 12px;
-	background-image : url("images/footer.png");
-	background-position : top left;
-	background-repeat : repeat-x; 
-	background-color : white;
-	right : 0px;
-	left : 261px;
-	padding : 10px;
-	border-collapse : collapse;
-	border-width : 1px 0px 0px 0px;
-	border-style : solid;
-	border-color : #88b0f0;
-
-}
-
-#prefFooter {
-	left : 0px;
-}
-
-#footer a, #prefFooter a {
-	color : gray;
-}
-
-#footer a:hover, #prefFooter a:hover {
-	color : black;
-}
-
-#prefHeader {
-	color : #4684ff;
-	font-size : 12px;
-	margin : 10px;
-	height : 33px;
-} */
-
 div.return {
 	float : right;
 	font-size : 12px;
@@ -1014,34 +929,6 @@ div.return a {
 div.return a:hover {
 	color : black;
 }
-
-/* #prefContentOuter {
-	clear : left;
-	position : absolute;
-	bottom : 41px;
-	top : 75px;
-	left : 0px;
-	right : 0px;
-	min-height : 300px;
-	border-width : 1px 0px 0px 0px;
-	border-color : #88b0f0;
-	border-style : solid;
-	font-size : 12px;
-}
-
-#prefContent {
-	z-index : 4;
-	background-image : url("images/prefs-content.png");
-	background-position : top left;
-	background-repeat : repeat-x;
-	position : absolute;
-	bottom : 0px;
-	top : 0px;
-	left : 0px;
-	right : 0px;
-	padding : 1em;
-	overflow : auto;
-} */
 
 #header .logo {
 	float : right;
@@ -1101,22 +988,6 @@ div.autocomplete ul li {
 #feedOpToolbar {
 	float : right;
 }
-
-/*
-div.topLinks {
-	float : right;
-	color : gray;
-	font-size : 12px;
-	line-height : 120%;
-}
-
-div.topLinks a {
-	color : #4684ff;	
-}
-
-div.topLinks a:hover {
-	color : black;
-} */
 
 #header a.feedback {
 	color : #009900;
@@ -1309,10 +1180,6 @@ div.dlgButtons {
 	clear : both;
 }
 
-span.prefsLabelEntry {
-	padding : 2px;
-}
-
 span.labelColorIndicator {
 	height : 14px;
 	width : 14px;
@@ -1351,37 +1218,6 @@ div.labelColorIndicator {
 	background-color : #fff7d5;	
 	color : #063064;
 	margin-right : 10px;
-}
-
-div.colorPicker div.colorPickerEntry:hover {
-	border : 1px solid #88b0f0;
-}
-
-div.colorPicker div.ccPrompt:hover {
-	color : black;
-}
-
-div.colorPicker div.colorPickerEntry {
-	height : 15px;
-	width : 15px;
-	line-height : 13px;
-	font-height : 9px;
-	text-align : center;
-	border : 1px solid black;
-	margin : 5px 5px 0px 0px;
-	float : left;
-}
-
-div.colorPicker {
-	border : 1px solid #cccccc;
-	background : #f0f0f0;
-	width : 110px;
-	padding : 0px 0px 5px 5px;
-	position : absolute;
-	left : auto;
-	top : auto;
-	z-index : 3;
-	color : #909090;
 }
 
 optgroup {
@@ -1461,8 +1297,14 @@ div.hlRight img {
 span.hlUpdated {
 	color : gray;
 	font-weight : medium;
-	width : 100px;
-	display : inline-block;
+	min-width : 100px;
+	display : table-cell;
+	width : 100%;
+	vertical-align : middle;
+	padding-top : 4px;
+	padding-bottom : 4px;
+	text-align : right;
+
 }
 
 div.hlLeft input {
@@ -1487,6 +1329,9 @@ div.hlUpdPic img {
 	max-width : 16px;
 }
 
+div.fatalError {
+	margin-bottom : 10px;
+}
 
 div.fatalError button {
 	margin-top : 5px;
@@ -1538,7 +1383,7 @@ div.fatalError textarea {
 	border-top-width : 0px;
 }
 
-#headlines-toolbar_splitter {
+#headlines-toolbar_splitter, #toolbar_splitter {
 	display : none;
 }
 
@@ -1546,11 +1391,6 @@ div.fatalError textarea {
 	margin : 0px;
 	padding : 0px;
 	border-width : 0px;
-}
-
-#content-tabs .dijitTab {
-	margin-top : 0px;
-	padding-top : 0px;
 }
 
 #toolbar {
@@ -1638,21 +1478,16 @@ div#pref-tabs .dijitContentPane h3 {
 	font-weight : bold;
 }
 
-/* div#feedTree {
-	font-size : 11px;
-	font-family : "Lucida Grande", "Segoe UI", Tahoma, Arial, sans-serif;
-} */
-
-
 #pref-filter-wrap, #pref-filter-header, #pref-filter-content, 
 #pref-label-wrap, #pref-label-header, #pref-label-content,
-#pref-user-wrap, #pref-user-header, #pref-user-content {
+#pref-user-wrap, #pref-user-header, #pref-user-content, 
+#pref-instance-wrap, #pref-instance-header, #pref-instance-content {
 	margin : 0px;
 	padding : 0px;
 	border-width : 0px;
 }
 
-#userConfigTab, #labelConfigTab, #filterConfigTab, #pref-feeds-feeds { 
+#userConfigTab, #labelConfigTab, #filterConfigTab, #pref-feeds-feeds, #instanceConfigTab { 
 	padding : 0px;
 }
 

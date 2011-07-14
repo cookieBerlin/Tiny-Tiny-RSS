@@ -1,18 +1,29 @@
 <html>
 <head>
 	<title>Tiny Tiny RSS : Login</title>
+	<link rel="stylesheet" type="text/css" href="lib/dijit/themes/claro/claro.css"/>
 	<link rel="stylesheet" type="text/css" href="tt-rss.css">
 	<link rel="shortcut icon" type="image/png" href="images/favicon.png">
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+	<script type="text/javascript" src="lib/dojo/dojo.js" djConfig="parseOnLoad: true"></script>
 	<script type="text/javascript" src="lib/prototype.js"></script>
 	<script type="text/javascript" src="lib/scriptaculous/scriptaculous.js?load=effects,dragdrop,controls"></script>
 	<script type="text/javascript" src="functions.js"></script>
+	<script type="text/javascript" charset="utf-8" src="errors.php?mode=js"></script>
 </head>
 
-<body id="ttrssLogin">
+<body id="ttrssLogin" class="claro">
 
 <script type="text/javascript">
 function init() {
+
+	dojo.require("dijit.Dialog");
+
+	var test = setCookie("ttrss_test", "TEST");
+
+	if (getCookie("ttrss_test") != "TEST") {
+		return fatalError(2);
+	}
 
 	var limit_set = getCookie("ttrss_bwlimit");
 
@@ -27,7 +38,7 @@ function fetchProfiles() {
 	try {
 		var params = Form.serialize('loginForm');
 		var query = "?op=getProfiles&" + params;
-		
+
 		if (query) {
 			new Ajax.Request("backend.php",	{
 				parameters: query,
@@ -47,7 +58,7 @@ function fetchProfiles() {
 function languageChange(elem) {
 	try {
 		document.forms['loginForm']['click'].disabled = true;
-	
+
 		var lang = elem[elem.selectedIndex].value;
 		setCookie("ttrss_lang", lang, <?php print SESSION_COOKIE_LIFETIME ?>);
 		window.location.reload();
@@ -65,7 +76,7 @@ function bwLimitChange(elem) {
 	try {
 		var limit_set = elem.checked;
 
-		setCookie("ttrss_bwlimit", limit_set, 
+		setCookie("ttrss_bwlimit", limit_set,
 			<?php print SESSION_COOKIE_LIFETIME ?>);
 
 	} catch (e) {
@@ -118,14 +129,13 @@ function validateLoginForm(f) {
 		<?php } ?>
 		<table>
 			<tr><td align="right"><?php echo __("Login:") ?></td>
-			<td align="right"><input name="login" 
+			<td align="right"><input name="login"
 				onchange="fetchProfiles()" onfocus="fetchProfiles()"
-				value="<?php echo $_SERVER["REMOTE_USER"] ?>"></td></tr>
+				value="<?php echo get_remote_user($link) ?>"></td></tr>
 			<tr><td align="right"><?php echo __("Password:") ?></td>
 			<td align="right"><input type="password" name="password"
 				onchange="fetchProfiles()" onfocus="fetchProfiles()"
-				value="<?php echo $_SERVER["REMOTE_USER"] ?>"></td></tr>
-			<?php if (ENABLE_TRANSLATIONS) { ?>
+				value="<?php echo get_remote_fakepass($link) ?>"></td></tr>
 			<tr><td align="right"><?php echo __("Language:") ?></td>
 			<td align="right">
 			<?php
@@ -134,7 +144,6 @@ function validateLoginForm(f) {
 
 			?>
 			</td></tr>
-			<?php } ?>
 
 			<tr><td align="right"><?php echo __("Profile:") ?></td>
 			<td align="right" id="profile_box">
@@ -156,7 +165,7 @@ function validateLoginForm(f) {
 			<?php } ?>
 
 				<input type="hidden" name="action" value="login">
-				<input type="hidden" name="rt" 
+				<input type="hidden" name="rt"
 					value="<?php if ($return_to != 'none') { echo $return_to; } ?>">
 			</td></tr>
 
@@ -177,7 +186,7 @@ function validateLoginForm(f) {
 	<td align="center" class="loginBottom">
 	<a href="http://tt-rss.org/">Tiny Tiny RSS</a>
 	<?php if (!defined('HIDE_VERSION')) { ?>
-		 v<?php echo VERSION ?> 
+		 v<?php echo VERSION ?>
 	<?php } ?>
 	&copy; 2005&ndash;<?php echo date('Y') ?> <a href="http://fakecake.org/">Andrew Dolgov</a>
 	</td>

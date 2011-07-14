@@ -39,15 +39,15 @@
 
 					db_query($link, "INSERT INTO ttrss_settings_profiles (title, owner_uid)
 						VALUES ('$title', ".$_SESSION["uid"] .")");
-	
+
 					$result = db_query($link, "SELECT id FROM ttrss_settings_profiles WHERE
 						title = '$title'");
-	
+
 					if (db_num_rows($result) != 0) {
 						$profile_id = db_fetch_result($result, 0, "id");
-	
+
 						if ($profile_id) {
-							initialize_user_prefs($link, $_SESSION["uid"], $profile_id); 
+							initialize_user_prefs($link, $_SESSION["uid"], $profile_id);
 						}
 					}
 				}
@@ -85,7 +85,7 @@
 				}
 
 				db_query($link, "COMMIT");
-			}			
+			}
 			return;
 		}
 
@@ -95,7 +95,7 @@
 
 			foreach ($ids as $id) {
 				$result = db_query($link, "DELETE FROM ttrss_archived_feeds WHERE
-					(SELECT COUNT(*) FROM ttrss_user_entries 
+					(SELECT COUNT(*) FROM ttrss_user_entries
 						WHERE orig_feed_id = '$id') = 0 AND
 						id = '$id' AND owner_uid = ".$_SESSION["uid"]);
 
@@ -105,8 +105,6 @@
 		}
 
 		if ($subop == "addfeed") {
-			header("Content-Type: text/plain");
-
 			$feed = db_escape_string($_REQUEST['feed']);
 			$cat = db_escape_string($_REQUEST['cat']);
 			$login = db_escape_string($_REQUEST['login']);
@@ -121,7 +119,6 @@
 		}
 
 		if ($subop == "extractfeedurls") {
-			header("Content-Type: text/plain");
 
 			$urls = get_feeds_from_html($_REQUEST['url']);
 
@@ -130,8 +127,6 @@
 		}
 
 		if ($subop == "togglepref") {
-			header("Content-Type: text/plain");
-
 			$key = db_escape_string($_REQUEST["key"]);
 			set_pref($link, $key, !get_pref($link, $key));
 			$value = get_pref($link, $key);
@@ -141,8 +136,6 @@
 		}
 
 		if ($subop == "setpref") {
-			header("Content-Type: text/plain");
-
 			$value = str_replace("\n", "<br/>", $_REQUEST['value']);
 
 			$key = db_escape_string($_REQUEST["key"]);
@@ -155,8 +148,6 @@
 		}
 
 		if ($subop == "mark") {
-			header("Content-Type: text/plain");
-
 			$mark = $_REQUEST["mark"];
 			$id = db_escape_string($_REQUEST["id"]);
 
@@ -174,11 +165,9 @@
 		}
 
 		if ($subop == "delete") {
-			header("Content-Type: text/plain");
-
 			$ids = db_escape_string($_REQUEST["ids"]);
 
-			$result = db_query($link, "DELETE FROM ttrss_user_entries 				
+			$result = db_query($link, "DELETE FROM ttrss_user_entries
 				WHERE ref_id IN ($ids) AND owner_uid = " . $_SESSION["uid"]);
 
 			print json_encode(array("message" => "UPDATE_COUNTERS"));
@@ -186,11 +175,9 @@
 		}
 
 		if ($subop == "unarchive") {
-			header("Content-Type: text/plain");
-
 			$ids = db_escape_string($_REQUEST["ids"]);
 
-			$result = db_query($link, "UPDATE ttrss_user_entries 
+			$result = db_query($link, "UPDATE ttrss_user_entries
 				SET feed_id = orig_feed_id, orig_feed_id = NULL
 				WHERE ref_id IN ($ids) AND owner_uid = " . $_SESSION["uid"]);
 
@@ -199,8 +186,6 @@
 		}
 
 		if ($subop == "archive") {
-			header("Content-Type: text/plain");
-
 			$ids = split(",", db_escape_string($_REQUEST["ids"]));
 
 			foreach ($ids as $id) {
@@ -212,8 +197,6 @@
 		}
 
 		if ($subop == "publ") {
-			header("Content-Type: text/plain");
-
 			$pub = $_REQUEST["pub"];
 			$id = db_escape_string($_REQUEST["id"]);
 			$note = trim(strip_tags(db_escape_string($_REQUEST["note"])));
@@ -224,31 +207,36 @@
 				$pub = "false";
 			}
 
-			$result = db_query($link, "UPDATE ttrss_user_entries SET 
+			$result = db_query($link, "UPDATE ttrss_user_entries SET
 				published = $pub
 				WHERE ref_id = '$id' AND owner_uid = " . $_SESSION["uid"]);
 
-			print json_encode(array("message" => "UPDATE_COUNTERS"));
+			$pubsub_result = false;
+
+			if (PUBSUBHUBBUB_HUB) {
+				$rss_link = get_self_url_prefix() .
+					"/backend.php?op=rss&id=-2&key=" .
+					get_feed_access_key($link, -2, false);
+
+				$p = new Publisher(PUBSUBHUBBUB_HUB);
+
+				$pubsub_result = $p->publish_update($rss_link);
+			}
+
+			print json_encode(array("message" => "UPDATE_COUNTERS",
+				"pubsub_result" => $pubsub_result));
 			return;
 		}
 
-/*		if ($subop == "updateFeed") {
+		// Silent
+		/* if ($subop == "update") {
 			$feed_id = db_escape_string($_REQUEST["feed"]);
-
 			update_rss_feed($link, $feed_id);
-
-			print "<rpc-reply>";
-			print "<message>UPDATE_COUNTERS</message>";
-			print "</rpc-reply>";
-
 			return;
 		} */
 
 		if ($subop == "updateAllFeeds" || $subop == "getAllCounters") {
-
-			header("Content-Type: text/plain");
-
-			$last_article_id = (int) $_REQUEST["last_article_id"];	
+			$last_article_id = (int) $_REQUEST["last_article_id"];
 
 			$reply = array();
 
@@ -257,12 +245,12 @@
 			if ($last_article_id != getLastArticleId($link)) {
 				$omode = $_REQUEST["omode"];
 
-				if ($omode != "T") 
+				if ($omode != "T")
 					$reply['counters'] = getAllCounters($link, $omode);
 				else
 					$reply['counters'] = getGlobalCounters($link);
 			}
- 
+
 			$reply['runtime-info'] = make_runtime_info($link);
 
 
@@ -272,8 +260,6 @@
 
 		/* GET["cmode"] = 0 - mark as read, 1 - as unread, 2 - toggle */
 		if ($subop == "catchupSelected") {
-			header("Content-Type: text/plain");
-
 			$ids = split(",", db_escape_string($_REQUEST["ids"]));
 			$cmode = sprintf("%d", $_REQUEST["cmode"]);
 
@@ -284,8 +270,6 @@
 		}
 
 		if ($subop == "markSelected") {
-			header("Content-Type: text/plain");
-
 			$ids = split(",", db_escape_string($_REQUEST["ids"]));
 			$cmode = sprintf("%d", $_REQUEST["cmode"]);
 
@@ -296,8 +280,6 @@
 		}
 
 		if ($subop == "publishSelected") {
-			header("Content-Type: text/plain");
-
 			$ids = split(",", db_escape_string($_REQUEST["ids"]));
 			$cmode = sprintf("%d", $_REQUEST["cmode"]);
 
@@ -307,25 +289,21 @@
 			return;
 		}
 
-		// XML method
 		if ($subop == "sanityCheck") {
-
 			$_SESSION["hasAudio"] = $_REQUEST["hasAudio"] === "true";
 
-			print "<rpc-reply>";
-			if (sanity_check($link)) {
-				print "<error error-code=\"0\"/>";
+			$reply = array();
 
-				print "<init-params><![CDATA[";
-				print json_encode(make_init_params($link));
-				print "]]></init-params>";
+			$reply['error'] = sanity_check($link);
 
-				print_runtime_info($link);
+			if ($reply['error']['code'] == 0) {
+				$reply['init-params'] = make_init_params($link);
+				$reply['runtime-info'] = make_runtime_info($link);
 			}
-			print "</rpc-reply>";
 
+			print json_encode($reply);
 			return;
-		}		
+		}
 
 /*		if ($subop == "globalPurge") {
 
@@ -337,8 +315,6 @@
 		} */
 
 		if ($subop == "setArticleTags") {
-			header("Content-Type: text/plain");
-
 			global $memcache;
 
 			$id = db_escape_string($_REQUEST["id"]);
@@ -357,11 +333,11 @@
 
 				$int_id = db_fetch_result($result, 0, "int_id");
 
-				db_query($link, "DELETE FROM ttrss_tags WHERE 
+				db_query($link, "DELETE FROM ttrss_tags WHERE
 					post_int_id = $int_id AND owner_uid = '".$_SESSION["uid"]."'");
 
 				foreach ($tags as $tag) {
-					$tag = sanitize_tag($tag);	
+					$tag = sanitize_tag($tag);
 
 					if (!tag_is_valid($tag)) {
 						continue;
@@ -372,9 +348,9 @@
 					}
 
 //					print "<!-- $id : $int_id : $tag -->";
-					
+
 					if ($tag != '') {
-						db_query($link, "INSERT INTO ttrss_tags 
+						db_query($link, "INSERT INTO ttrss_tags
 							(post_int_id, owner_uid, tag_name) VALUES ('$int_id', '".$_SESSION["uid"]."', '$tag')");
 					}
 
@@ -383,9 +359,9 @@
 
 				/* update tag cache */
 
-				$tags_str = join(",", $tags_to_cache);
+				$tags_str = asort(join(",", $tags_to_cache));
 
-				db_query($link, "UPDATE ttrss_user_entries 
+				db_query($link, "UPDATE ttrss_user_entries
 					SET tag_cache = '$tags_str' WHERE ref_id = '$id'
 					AND owner_uid = " . $_SESSION["uid"]);
 			}
@@ -397,39 +373,32 @@
 				$memcache->delete($obj_id);
 			}
 
-			$tags_str = format_tags_string(get_article_tags($link, $id), $id);
+			$tags = get_article_tags($link, $id);
+			$tags_str = format_tags_string($tags, $id);
+			$tags_str_full = join(", ", $tags);
+
+			if (!$tags_str_full) $tags_str_full = __("no tags");
 
 			print json_encode(array("tags_str" => array("id" => $id,
-				"content" => $tags_str)));
+				"content" => $tags_str, "content_full" => $tags_str_full)));
 
 			return;
 		}
 
 		if ($subop == "regenOPMLKey") {
-			header("Content-Type: text/plain");
-
-			update_feed_access_key($link, 'OPML:Publish', 
+			update_feed_access_key($link, 'OPML:Publish',
 				false, $_SESSION["uid"]);
 
-			$new_link = opml_publish_url($link);		
+			$new_link = opml_publish_url($link);
 
 			print json_encode(array("link" => $new_link));
 			return;
 		}
 
-		// XML method
-		if ($subop == "logout") {
-			logout_user();
-			print_error_xml(6);
-			return;
-		}
-
 		if ($subop == "completeTags") {
-			header("Content-Type: text/plain");
-
 			$search = db_escape_string($_REQUEST["search"]);
 
-			$result = db_query($link, "SELECT DISTINCT tag_name FROM ttrss_tags 
+			$result = db_query($link, "SELECT DISTINCT tag_name FROM ttrss_tags
 				WHERE owner_uid = '".$_SESSION["uid"]."' AND
 			  	tag_name LIKE '$search%' ORDER BY tag_name
 				LIMIT 10");
@@ -473,41 +442,36 @@
 
 		} */
 
-		// XML method
 		if ($subop == "getArticles") {
 			$ids = split(",", db_escape_string($_REQUEST["ids"]));
-
-			print "<rpc-reply>";
+			$articles = array();
 
 			foreach ($ids as $id) {
 				if ($id) {
-					outputArticleXML($link, $id, 0, false);
+					array_push($articles, format_article($link, $id, 0, false));
 				}
 			}
-			print "</rpc-reply>";
 
-			return;		
+			print json_encode($articles);
+			return;
 		}
 
 		if ($subop == "checkDate") {
-			header("Content-Type: text/plain");
-
 			$date = db_escape_string($_REQUEST["date"]);
 			$date_parsed = strtotime($date);
 
-			print json_encode(array("result" => (bool)$date_parsed));
+			print json_encode(array("result" => (bool)$date_parsed,
+				"date" => date("c", $date_parsed)));
 			return;
 		}
 
 		if ($subop == "assignToLabel" || $subop == "removeFromLabel") {
-			header("Content-Type: text/plain");
-
 			$reply = array();
 
 			$ids = split(",", db_escape_string($_REQUEST["ids"]));
 			$label_id = db_escape_string($_REQUEST["lid"]);
 
-			$label = db_escape_string(label_find_caption($link, $label_id, 
+			$label = db_escape_string(label_find_caption($link, $label_id,
 				$_SESSION["uid"]));
 
 			$reply["info-for-headlines"] = array();
@@ -522,7 +486,7 @@
 						label_remove_article($link, $id, $label, $_SESSION["uid"]);
 
 					$labels = get_article_labels($link, $id, $_SESSION["uid"]);
-				  
+
 					array_push($reply["info-for-headlines"],
 					  array("id" => $id, "labels" => format_article_labels($labels, $id)));
 
@@ -537,8 +501,6 @@
 		}
 
 		if ($subop == "updateFeedBrowser") {
-			header("Content-Type: text/plain");
-
 			$search = db_escape_string($_REQUEST["search"]);
 			$limit = db_escape_string($_REQUEST["limit"]);
 			$mode = (int) db_escape_string($_REQUEST["mode"]);
@@ -552,8 +514,52 @@
 		// Silent
 		if ($subop == "massSubscribe") {
 
-			$ids = split(",", db_escape_string($_REQUEST["ids"]));
+			$payload = json_decode($_REQUEST["payload"], false);
 			$mode = $_REQUEST["mode"];
+
+			if (!$payload || !is_array($payload)) return;
+
+			if ($mode == 1) {
+				foreach ($payload as $feed) {
+
+					$title = db_escape_string($feed[0]);
+					$feed_url = db_escape_string($feed[1]);
+
+					$result = db_query($link, "SELECT id FROM ttrss_feeds WHERE
+						feed_url = '$feed_url' AND owner_uid = " . $_SESSION["uid"]);
+
+					if (db_num_rows($result) == 0) {
+						$result = db_query($link, "INSERT INTO ttrss_feeds
+								(owner_uid,feed_url,title,cat_id,site_url)
+							VALUES ('".$_SESSION["uid"]."',
+								'$feed_url', '$title', NULL, '')");
+					}
+				}
+			} else if ($mode == 2) {
+				// feed archive
+				foreach ($payload as $id) {
+					$result = db_query($link, "SELECT * FROM ttrss_archived_feeds
+						WHERE id = '$id' AND owner_uid = " . $_SESSION["uid"]);
+
+					if (db_num_rows($result) != 0) {
+						$site_url = db_escape_string(db_fetch_result($result, 0, "site_url"));
+						$feed_url = db_escape_string(db_fetch_result($result, 0, "feed_url"));
+						$title = db_escape_string(db_fetch_result($result, 0, "title"));
+
+						$result = db_query($link, "SELECT id FROM ttrss_feeds WHERE
+							feed_url = '$feed_url' AND owner_uid = " . $_SESSION["uid"]);
+
+						if (db_num_rows($result) == 0) {
+							$result = db_query($link, "INSERT INTO ttrss_feeds
+									(owner_uid,feed_url,title,cat_id,site_url)
+								VALUES ('$id','".$_SESSION["uid"]."',
+									'$feed_url', '$title', NULL, '$site_url')");
+						}
+					}
+				}
+			}
+
+/*			$ids = split(",", db_escape_string($_REQUEST["ids"]));
 
 			$subscribed = array();
 
@@ -568,38 +574,36 @@
 					$orig_id = db_escape_string(db_fetch_result($result, 0, "id"));
 					$site_url = db_escape_string(db_fetch_result($result, 0, "site_url"));
 				}
-	
+
 				$feed_url = db_escape_string(db_fetch_result($result, 0, "feed_url"));
 				$title = db_escape_string(db_fetch_result($result, 0, "title"));
-	
+
 				$title_orig = db_fetch_result($result, 0, "title");
-	
+
 				$result = db_query($link, "SELECT id FROM ttrss_feeds WHERE
 						feed_url = '$feed_url' AND owner_uid = " . $_SESSION["uid"]);
-	
-				if (db_num_rows($result) == 0) {			
+
+				if (db_num_rows($result) == 0) {
 					if ($mode == 1) {
 						$result = db_query($link,
-							"INSERT INTO ttrss_feeds (owner_uid,feed_url,title,cat_id) 
+							"INSERT INTO ttrss_feeds (owner_uid,feed_url,title,cat_id)
 							VALUES ('".$_SESSION["uid"]."', '$feed_url', '$title', NULL)");
 					} else if ($mode == 2) {
 						$result = db_query($link,
-							"INSERT INTO ttrss_feeds (id,owner_uid,feed_url,title,cat_id,site_url) 
+							"INSERT INTO ttrss_feeds (id,owner_uid,feed_url,title,cat_id,site_url)
 							VALUES ('$orig_id','".$_SESSION["uid"]."', '$feed_url', '$title', NULL, '$site_url')");
 					}
 					array_push($subscribed, $title_orig);
 				}
-			}
+			} */
 
 			return;
-		} 
+		}
 
 		if ($subop == "digest-get-contents") {
-			header("Content-Type: text/plain");
-
 			$article_id = db_escape_string($_REQUEST['article_id']);
 
-			$result = db_query($link, "SELECT content 
+			$result = db_query($link, "SELECT content
 				FROM ttrss_entries, ttrss_user_entries
 				WHERE id = '$article_id' AND ref_id = id AND owner_uid = ".$_SESSION['uid']);
 
@@ -611,12 +615,10 @@
 		}
 
 		if ($subop == "digest-update") {
-			header("Content-Type: text/plain");
-
 			$feed_id = db_escape_string($_REQUEST['feed_id']);
 			$offset = db_escape_string($_REQUEST['offset']);
 			$seq = db_escape_string($_REQUEST['seq']);
-		
+
 			if (!$feed_id) $feed_id = -4;
 			if (!$offset) $offset = 0;
 
@@ -639,8 +641,6 @@
 		}
 
 		if ($subop == "digest-init") {
-			header("Content-Type: text/plain");
-
 			$tmp_feeds = api_get_feeds($link, -3, true, false, 0);
 
 			$feeds = array();
@@ -664,13 +664,11 @@
 		}
 
 		if ($subop == "sendEmail") {
-			header("Content-Type: text/plain");
-
 			$secretkey = $_REQUEST['secretkey'];
 
 			$reply = array();
 
-			if (DIGEST_ENABLE && $_SESSION['email_secretkey'] && 
+			if (DIGEST_ENABLE && $_SESSION['email_secretkey'] &&
 						$secretkey == $_SESSION['email_secretkey']) {
 
 				$_SESSION['email_secretkey'] = '';
@@ -723,8 +721,6 @@
 		}
 
 		if ($subop == "completeEmails") {
-			header("Content-Type: text/plain");
-
 			$search = db_escape_string($_REQUEST["search"]);
 
 			print "<ul>";
@@ -741,8 +737,6 @@
 		}
 
 		if ($subop == "quickAddCat") {
-			header("Content-Type: text/plain");
-
 			$cat = db_escape_string($_REQUEST["cat"]);
 
 			add_feed_category($link, $cat);
@@ -762,8 +756,6 @@
 		}
 
 		if ($subop == "regenFeedKey") {
-			header("Content-Type: text/plain");
-
 			$feed_id = db_escape_string($_REQUEST['id']);
 			$is_cat = (bool) db_escape_string($_REQUEST['is_cat']);
 
@@ -782,8 +774,6 @@
 		}
 
 		if ($subop == "verifyRegexp") {
-			header("Content-Type: text/plain");
-
 			$reg_exp = $_REQUEST["reg_exp"];
 
 			$status = @preg_match("/$reg_exp/i", "TEST") !== false;
@@ -794,23 +784,21 @@
 
 		// TODO: unify with digest-get-contents?
 		if ($subop == "cdmGetArticle") {
-			header("Content-Type: text/plain");
-
 			$id = db_escape_string($_REQUEST["id"]);
 
-			$result = db_query($link, "SELECT content, 
-				ttrss_feeds.site_url AS site_url FROM ttrss_user_entries, ttrss_feeds, 
+			$result = db_query($link, "SELECT content,
+				ttrss_feeds.site_url AS site_url FROM ttrss_user_entries, ttrss_feeds,
 				ttrss_entries
-				WHERE feed_id = ttrss_feeds.id AND ref_id = '$id' AND 
+				WHERE feed_id = ttrss_feeds.id AND ref_id = '$id' AND
 				ttrss_entries.id = ref_id AND
 				ttrss_user_entries.owner_uid = ".$_SESSION["uid"]);
 
 			if (db_num_rows($result) != 0) {
 				$line = db_fetch_assoc($result);
 
-				$article_content = sanitize_rss($link, $line["content"], 
+				$article_content = sanitize_rss($link, $line["content"],
 					false, false, $line['site_url']);
-			
+
 			} else {
 				$article_content = '';
 			}
@@ -822,8 +810,6 @@
 		}
 
 		if ($subop == "scheduleFeedUpdate") {
-			header("Content-Type: text/plain");
-
 			$feed_id = db_escape_string($_REQUEST["id"]);
 			$is_cat =  db_escape_string($_REQUEST['is_cat']) == 'true';
 
@@ -841,7 +827,7 @@
 				} else {
 					$message = __("Category update has been scheduled.");
 
-					if ($feed_id) 
+					if ($feed_id)
 						$cat_query = "cat_id = '$feed_id'";
 					else
 						$cat_query = "cat_id IS NULL";
@@ -860,10 +846,9 @@
 		}
 
 		if ($subop == "getTweetInfo") {
-			header("Content-Type: text/plain");
 			$id = db_escape_string($_REQUEST['id']);
 
-			$result = db_query($link, "SELECT title, link 
+			$result = db_query($link, "SELECT title, link
 				FROM ttrss_entries, ttrss_user_entries
 				WHERE id = '$id' AND ref_id = id AND owner_uid = " .$_SESSION['uid']);
 
@@ -880,20 +865,27 @@
 		}
 
 		if ($subop == "setNote") {
-			header("Content-Type: text/plain");
-
 			$id = db_escape_string($_REQUEST["id"]);
-			$note = strip_tags(db_escape_string($_REQUEST["note"]));
+			$note = trim(strip_tags(db_escape_string($_REQUEST["note"])));
 
 			db_query($link, "UPDATE ttrss_user_entries SET note = '$note'
 				WHERE ref_id = '$id' AND owner_uid = " . $_SESSION["uid"]);
 
 			$formatted_note = format_article_note($id, $note);
 
-			print json_encode(array("note" => $formatted_note));
+			print json_encode(array("note" => $formatted_note,
+				"raw_length" => mb_strlen($note)));
 			return;
 		}
 
-		print "<rpc-reply><error>Unknown method: $subop</error></rpc-reply>";
+		if ($subop == "genHash") {
+			$hash = sha1(uniqid(rand(), true));
+
+			print json_encode(array("hash" => $hash));
+			return;
+		}
+
+		print json_encode(array("error" => array("code" => 7,
+			"message" => "Unknown method: $subop")));
 	}
 ?>

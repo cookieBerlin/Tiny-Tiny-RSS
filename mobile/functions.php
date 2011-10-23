@@ -3,6 +3,23 @@
 
 	/* TODO replace with interface to db-prefs */
 
+	function iFrameForThisURL( $article_link)
+	{
+		if( !defined("IFRAME_URLS")) {
+			return FALSE;
+		}
+
+		$array = preg_split('/;/', constant("IFRAME_URLS"), -1, PREG_SPLIT_NO_EMPTY);
+
+		foreach ($array as $d) {
+			if( strpos($article_link, trim($d)) > 0) {
+				return TRUE;
+			}
+		}
+
+		return FALSE;
+	}
+
 	function mobile_pref_toggled($link, $id) {
 		if (get_pref($link, "_MOBILE_$id"))
 			return "true";
@@ -503,7 +520,14 @@
 				$content = preg_replace('/<img[^>]+>/is', '', $content);
 			}
 
-			print "<p>$content</p>";
+			// AC: ifraem for linked contentt
+			if( iFrameForThisURL( $article_link) == TRUE) {
+				print "<iframe src=\"".$article_link."\" width=\"100%\" height=\"600\" name=\"iframeContent\">".
+					  "<p>$content</p></iframe>";
+			} else {
+				print "<p>$content</p>";
+			}
+
 
             print "<div class='nav'>
                     <label>Navigation</label>

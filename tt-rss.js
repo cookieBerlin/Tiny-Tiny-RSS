@@ -330,7 +330,8 @@ function init_second_stage() {
 
 		loading_set_progress(30);
 
-		if (has_local_storage())
+		// can't use cache_clear() here because viewfeed might not have initialized yet
+		if ('sessionStorage' in window && window['sessionStorage'] !== null)
 			sessionStorage.clear();
 
 		console.log("second stage ok");
@@ -348,6 +349,10 @@ function quickMenuGo(opid) {
 
 		if (opid == "qmcTagCloud") {
 			displayDlg("printTagCloud");
+		}
+
+		if (opid == "qmcTagSelect") {
+			displayDlg("printTagSelect");
 		}
 
 		if (opid == "qmcSearch") {
@@ -561,12 +566,10 @@ function collapse_feedlist() {
 }
 
 function viewModeChanged() {
-	cache_flush();
 	return viewCurrentFeed('')
 }
 
 function viewLimitChanged() {
-	cache_flush();
 	return viewCurrentFeed('')
 }
 
@@ -680,6 +683,11 @@ function hotkey_handler(e) {
 
 		if (!hotkey_prefix) {
 
+			if (keycode == 69) { // e
+				var id = getActiveArticleId();
+				emailArticle(id);
+			}
+
 			if ((keycode == 191 || keychar == '?') && shift_key) { // ?
 				if (!Element.visible("hotkey_help_overlay")) {
 					Effect.Appear("hotkey_help_overlay", {duration : 0.3});
@@ -694,7 +702,7 @@ function hotkey_handler(e) {
 				return false;
 			}
 
-			if (keycode == 74) { // j
+			if (keycode == 74 && !shift_key) { // j
 				var rv = dijit.byId("feedTree").getPreviousFeed(
 						getActiveFeedId(), activeFeedIsCat());
 

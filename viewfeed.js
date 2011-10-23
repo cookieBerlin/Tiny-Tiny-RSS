@@ -1,6 +1,4 @@
 var active_post_id = false;
-var last_article_view = false;
-var active_real_feed_id = false;
 
 var article_cache = new Array();
 
@@ -9,18 +7,22 @@ var post_under_pointer = false;
 
 var last_requested_article = false;
 
-var preload_id_batch = [];
-var preload_timeout_id = false;
+var catchup_id_batch = [];
+var catchup_timeout_id = false;
+var feed_precache_timeout_id = false;
+var precache_idle_timeout_id = false;
 
-var cache_added = [];
+var cids_requested = [];
 
-function headlines_callback2(transport, feed_cur_page) {
+var has_storage = 'sessionStorage' in window && window['sessionStorage'] !== null;
+
+function headlines_callback2(transport, offset, background) {
 	try {
 		handle_rpc_json(transport);
 
 		loading_set_progress(25);
 
-		console.log("headlines_callback2 [page=" + feed_cur_page + "]");
+		console.log("headlines_callback2 [offset=" + offset + "] B:" + background);
 
 		var is_cat = false;
 		var feed_id = false;
@@ -38,20 +40,20 @@ function headlines_callback2(transport, feed_cur_page) {
 			is_cat = reply['headlines']['is_cat'];
 			feed_id = reply['headlines']['id'];
 
+			if (background) {
+				cache_headlines(feed_id, is_cat, reply['headlines']['toolbar'], reply['headlines']['content']);
+				return;
+			}
+
 			setActiveFeedId(feed_id, is_cat);
 
-			var update_btn = document.forms["main_toolbar_form"].update;
-
-			update_btn.disabled = !(feed_id >= 0 && !is_cat);
-
 			try {
-				if (feed_cur_page == 0) {
+				if (offset == 0) {
 					$("headlines-frame").scrollTop = 0;
 				}
 			} catch (e) { };
 
 			var headlines_count = reply['headlines-info']['count'];
-			var headlines_unread = reply['headlines-info']['unread'];
 
 			vgroup_last_feed = reply['headlines-info']['vgroup_last_feed'];
 
@@ -65,17 +67,23 @@ function headlines_callback2(transport, feed_cur_page) {
 			var articles = reply['articles'];
 			var runtime_info = reply['runtime-info'];
 
-			if (feed_cur_page == 0) {
+			if (offset == 0) {
 				dijit.byId("headlines-frame").attr('content',
 					reply['headlines']['content']);
 
 				dijit.byId("headlines-toolbar").attr('content',
 					reply['headlines']['toolbar']);
 
+				var hsp = $("headlines-spacer");
+				if (!hsp) hsp = new Element("DIV", {"id": "headlines-spacer"});
+
+				dijit.byId('headlines-frame').domNode.appendChild(hsp);
+
 				initHeadlinesMenu();
 
 			} else {
-				if (headlines_count > 0) {
+
+				if (headlines_count > 0 && feed_id == getActiveFeedId() && is_cat == activeFeedIsCat()) {
 					console.log("adding some more headlines...");
 
 					var c = dijit.byId("headlines-frame");
@@ -83,9 +91,25 @@ function headlines_callback2(transport, feed_cur_page) {
 
 					$("headlines-tmp").innerHTML = reply['headlines']['content'];
 
+					var hsp = $("headlines-spacer");
+
+					if (hsp)
+						c.domNode.removeChild(hsp);
+
 					$$("#headlines-tmp > div").each(function(row) {
-						c.domNode.appendChild(row);
+						if ($$("#headlines-frame DIV[id="+row.id+"]").length == 0) {
+							row.style.display = 'none';
+							c.domNode.appendChild(row);
+						} else {
+							row.parentNode.removeChild(row);
+						}
 					});
+
+					if (!hsp) hsp = new Element("DIV", {"id": "headlines-spacer"});
+
+					fixHeadlinesOrder(getLoadedArticleIds());
+
+					c.domNode.appendChild(hsp);
 
 					console.log("restore selected ids: " + ids);
 
@@ -95,19 +119,36 @@ function headlines_callback2(transport, feed_cur_page) {
 
 					initHeadlinesMenu();
 
+					$$("#headlines-frame > div[id*=RROW]").each(
+					function(child) {
+						if (!Element.visible(child))
+							new Effect.Appear(child, { duration : 0.5 });
+					});
+
 				} else {
 					console.log("no new headlines received");
+
+					var hsp = $("headlines-spacer");
+
+					if (hsp) hsp.innerHTML = "";
 				}
 			}
+
+			if (headlines_count > 0)
+				cache_headlines(feed_id, is_cat, reply['headlines']['toolbar'], $("headlines-frame").innerHTML);
 
 			if (articles) {
 				for (var i = 0; i < articles.length; i++) {
 					var a_id = articles[i]['id'];
-					cache_inject(a_id, articles[i]['content']);
+					cache_set("article:" + a_id, articles[i]['content']);
 				}
 			} else {
 				console.log("no cached articles received");
 			}
+
+			// do not precache stuff after fresh feed
+			if (feed_id != -3)
+				precache_headlines();
 
 			if (counters)
 				parse_counters(counters);
@@ -115,12 +156,12 @@ function headlines_callback2(transport, feed_cur_page) {
 				request_counters();
 
 		} else {
-			console.warn("headlines_callback: returned no XML object");
+			console.error("Invalid object received: " + transport.responseText);
 			dijit.byId("headlines-frame").attr('content', "<div class='whiteBox'>" +
-					__('Could not update headlines (invalid object received)') + "</div>");
+					__('Could not update headlines (invalid object received - see error console for details)') +
+					"</div>");
 		}
 
-		_feed_cur_page = feed_cur_page;
 		_infscroll_request_sent = 0;
 
 		notify("");
@@ -172,14 +213,6 @@ function showArticleInHeadlines(id) {
 
 		var upd_img_pic = $("FUPDPIC-" + id);
 
-		var cache_prefix = "";
-
-		if (activeFeedIsCat()) {
-			cache_prefix = "C:";
-		} else {
-			cache_prefix = "F:";
-		}
-
 		var view_mode = false;
 
 		try {
@@ -194,22 +227,10 @@ function showArticleInHeadlines(id) {
 
 			upd_img_pic.src = "images/blank_icon.gif";
 
-			cache_invalidate(cache_prefix + getActiveFeedId());
-
-			/* cache_inject(cache_prefix + getActiveFeedId(),
-				$("headlines-frame").innerHTML,
-				getFeedUnread(getActiveFeedId())); */
+			cache_headlines(getActiveFeedId(), activeFeedIsCat(), null, $("headlines-frame").innerHTML);
 
 		} else if (article_is_unread && view_mode == "all_articles") {
-
-			cache_invalidate(cache_prefix + getActiveFeedId());
-
-			/* cache_inject(cache_prefix + getActiveFeedId(),
-				$("headlines-frame").innerHTML,
-				getFeedUnread(getActiveFeedId())-1); */
-
-		} else if (article_is_unread) {
-			cache_invalidate(cache_prefix + getActiveFeedId());
+			cache_headlines(getActiveFeedId(), activeFeedIsCat(), null, $("headlines-frame").innerHTML);
 		}
 
 		markHeadline(id);
@@ -228,36 +249,52 @@ function article_callback2(transport, id) {
 
 		handle_rpc_json(transport);
 
-		var reply = JSON.parse(transport.responseText);
+		var reply = false;
+
+		try {
+			reply = JSON.parse(transport.responseText);
+		} catch (e) {
+			console.error(e);
+		}
 
 		if (reply) {
+
 			var upic = $('FUPDPIC-' + id);
 
 			if (upic) upic.src = 'images/blank_icon.gif';
-
-			if (id != last_requested_article) {
-				console.log("requested article id is out of sequence, aborting");
-				return;
-			}
 
 			reply.each(function(article) {
 				if (active_post_id == article['id']) {
 					render_article(article['content']);
 				}
-				cache_inject(article['id'], article['content']);
+				cids_requested.remove(article['id']);
+
+				cache_set("article:" + article['id'], article['content']);
 			});
 
+//			if (id != last_requested_article) {
+//				console.log("requested article id is out of sequence, aborting");
+//				return;
+//			}
+
 		} else {
-			console.warn("article_callback: returned invalid data");
+			console.error("Invalid object received: " + transport.responseText);
 
 			render_article("<div class='whiteBox'>" +
-					__('Could not display article (invalid data received)') + "</div>");
+					__('Could not display article (invalid object received - see error console for details)') + "</div>");
 		}
 
-		var date = new Date();
-		last_article_view = date.getTime() / 1000;
-
 		request_counters();
+
+		try {
+			if (!_infscroll_disable &&
+					$$("#headlines-frame > div[id*=RROW]").last().hasClassName("Selected")) {
+
+				loadMoreHeadlines();
+			}
+		} catch (e) {
+			console.warn(e);
+		}
 
 		notify("");
 	} catch (e) {
@@ -269,7 +306,7 @@ function view(id) {
 	try {
 		console.log("loading article: " + id);
 
-		var cached_article = cache_find(id);
+		var cached_article = cache_get("article:" + id);
 
 		console.log("cache check result: " + (cached_article != false));
 
@@ -277,16 +314,18 @@ function view(id) {
 
 		var query = "?op=view&id=" + param_escape(id);
 
-		var neighbor_ids = getRelativePostIds(active_post_id);
+		var neighbor_ids = getRelativePostIds(id);
 
 		/* only request uncached articles */
 
-		var cids_to_request = Array();
+		var cids_to_request = [];
 
 		for (var i = 0; i < neighbor_ids.length; i++) {
-			if (!cache_check(neighbor_ids[i])) {
-				cids_to_request.push(neighbor_ids[i]);
-			}
+			if (cids_requested.indexOf(neighbor_ids[i]) == -1)
+				if (!cache_get("article:" + neighbor_ids[i])) {
+					cids_to_request.push(neighbor_ids[i]);
+					cids_requested.push(neighbor_ids[i]);
+				}
 		}
 
 		console.log("additional ids: " + cids_to_request.toString());
@@ -298,6 +337,8 @@ function view(id) {
 
 		active_post_id = id;
 		showArticleInHeadlines(id);
+
+		precache_headlines();
 
 		if (!cached_article) {
 
@@ -318,11 +359,27 @@ function view(id) {
 			query = query + "&mode=prefetch_old";
 			render_article(cached_article);
 
+			// if we don't need to request any relative ids, we might as well skip
+			// the server roundtrip altogether
+			if (cids_to_request.length == 0) {
+
+				try {
+					if (!_infscroll_disable &&
+						$$("#headlines-frame > div[id*=RROW]").last().hasClassName("Selected")) {
+
+							loadMoreHeadlines();
+					}
+				} catch (e) {
+					console.warn(e);
+				}
+
+				return;
+			}
 		}
 
-		cache_expire();
-
 		last_requested_article = id;
+
+		console.log(query);
 
 		new Ajax.Request("backend.php", {
 			parameters: query,
@@ -364,6 +421,8 @@ function toggleMark(id, client_only) {
 			query = query + "&mark=0";
 		}
 
+		cache_headlines(getActiveFeedId(), activeFeedIsCat(), null, $("headlines-frame").innerHTML);
+
 		if (!client_only) {
 			new Ajax.Request("backend.php", {
 				parameters: query,
@@ -402,6 +461,8 @@ function togglePub(id, client_only, no_effects, note) {
 
 			query = query + "&pub=0";
 		}
+
+		cache_headlines(getActiveFeedId(), activeFeedIsCat(), null, $("headlines-frame").innerHTML);
 
 		if (!client_only) {
 			new Ajax.Request("backend.php", {
@@ -566,27 +627,17 @@ function selectionRemoveLabel(id, ids) {
 			return;
 		}
 
-//		var ok = confirm(__("Remove selected articles from label?"));
+		var query = "?op=rpc&subop=removeFromLabel&ids=" +
+			param_escape(ids.toString()) + "&lid=" + param_escape(id);
 
-//		if (ok) {
+		console.log(query);
 
-			var query = "?op=rpc&subop=removeFromLabel&ids=" +
-				param_escape(ids.toString()) + "&lid=" + param_escape(id);
-
-			console.log(query);
-
-//			notify_progress("Loading, please wait...");
-
-			cache_invalidate("F:" + (-11 - id));
-
-			new Ajax.Request("backend.php", {
-				parameters: query,
-				onComplete: function(transport) {
-					handle_rpc_json(transport);
-					show_labels_in_headlines(transport);
-				} });
-
-//		}
+		new Ajax.Request("backend.php", {
+			parameters: query,
+			onComplete: function(transport) {
+				handle_rpc_json(transport);
+				show_labels_in_headlines(transport);
+			} });
 
 	} catch (e) {
 		exception_error("selectionAssignLabel", e);
@@ -604,27 +655,17 @@ function selectionAssignLabel(id, ids) {
 			return;
 		}
 
-//		var ok = confirm(__("Assign selected articles to label?"));
+		var query = "?op=rpc&subop=assignToLabel&ids=" +
+			param_escape(ids.toString()) + "&lid=" + param_escape(id);
 
-//		if (ok) {
+		console.log(query);
 
-			cache_invalidate("F:" + (-11 - id));
-
-			var query = "?op=rpc&subop=assignToLabel&ids=" +
-				param_escape(ids.toString()) + "&lid=" + param_escape(id);
-
-			console.log(query);
-
-//			notify_progress("Loading, please wait...");
-
-			new Ajax.Request("backend.php", {
-				parameters: query,
-				onComplete: function(transport) {
-					handle_rpc_json(transport);
-					show_labels_in_headlines(transport);
-				} });
-
-//		}
+		new Ajax.Request("backend.php", {
+			parameters: query,
+			onComplete: function(transport) {
+				handle_rpc_json(transport);
+				show_labels_in_headlines(transport);
+			} });
 
 	} catch (e) {
 		exception_error("selectionAssignLabel", e);
@@ -919,7 +960,7 @@ function archiveSelection() {
 		console.log(query);
 
 		for (var i = 0; i < rows.length; i++) {
-			cache_invalidate(rows[i]);
+			cache_delete("article:" + rows[i]);
 		}
 
 		new Ajax.Request("backend.php", {
@@ -988,7 +1029,7 @@ function editArticleTags(id) {
 						var data = JSON.parse(transport.responseText);
 
 						if (data) {
-							var tags_str = data.tags_str;
+							var tags_str = article.tags;
 							var id = tags_str.id;
 
 							var tags = $("ATSTR-" + id);
@@ -997,7 +1038,7 @@ function editArticleTags(id) {
 							if (tags) tags.innerHTML = tags_str.content;
 							if (tooltip) tooltip.attr('label', tags_str.content_full);
 
-							cache_invalidate(id);
+							cache_delete("article:" + id);
 						}
 
 					}});
@@ -1032,318 +1073,86 @@ function cdmScrollToArticleId(id) {
 	}
 }
 
-function cache_inject(id, article, param) {
-
-	try {
-		if (!cache_check_param(id, param)) {
-			//console.log("cache_article: miss: " + id + " [p=" + param + "]");
-
-		   var date = new Date();
-	      var ts = Math.round(date.getTime() / 1000);
-
-			var cache_obj = {};
-
-			cache_obj["id"] = id;
-			cache_obj["data"] = article;
-			cache_obj["param"] = param;
-
-			if (param) id = id + ":" + param;
-
-			cache_added["TS:" + id] = ts;
-
-			if (has_local_storage())
-				sessionStorage.setItem(id, JSON.stringify(cache_obj));
-			else
-				article_cache.push(cache_obj);
-
-		} else {
-			//console.log("cache_article: hit: " + id + " [p=" + param + "]");
-		}
-	} catch (e) {
-		exception_error("cache_inject", e);
-	}
-}
-
-function cache_find(id) {
-
-	if (has_local_storage()) {
-		var cache_obj = sessionStorage.getItem(id);
-
-		if (cache_obj) {
-			cache_obj = JSON.parse(cache_obj);
-
-			if (cache_obj)
-				return cache_obj['data'];
-		}
-
-	} else {
-		for (var i = 0; i < article_cache.length; i++) {
-			if (article_cache[i]["id"] == id) {
-				return article_cache[i]["data"];
-			}
-		}
-	}
-	return false;
-}
-
-function cache_find_param(id, param) {
-
-	if (has_local_storage()) {
-
-		if (param) id = id + ":" + param;
-
-		var cache_obj = sessionStorage.getItem(id);
-
-		if (cache_obj) {
-			cache_obj = JSON.parse(cache_obj);
-
-			if (cache_obj)
-				return cache_obj['data'];
-		}
-
-	} else {
-		for (var i = 0; i < article_cache.length; i++) {
-			if (article_cache[i]["id"] == id && article_cache[i]["param"] == param) {
-				return article_cache[i]["data"];
-			}
-		}
-	}
-
-	return false;
-}
-
-function cache_check(id) {
-	if (has_local_storage()) {
-		if (sessionStorage.getItem(id))
-			return true;
-	} else {
-		for (var i = 0; i < article_cache.length; i++) {
-			if (article_cache[i]["id"] == id) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
-function cache_check_param(id, param) {
-	if (has_local_storage()) {
-
-		if (param) id = id + ":" + param;
-
-		if (sessionStorage.getItem(id))
-			return true;
-
-	} else {
-		for (var i = 0; i < article_cache.length; i++) {
-			if (article_cache[i]["id"] == id && article_cache[i]["param"] == param) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
-function cache_expire() {
-if (has_local_storage()) {
-
-		var date = new Date();
-		var timestamp = Math.round(date.getTime() / 1000);
-
-		for (var i = 0; i < sessionStorage.length; i++) {
-
-			var id = sessionStorage.key(i);
-
-			if (timestamp - cache_added["TS:" + id] > 180) {
-				sessionStorage.removeItem(id);
-			}
-		}
-
-	} else {
-		while (article_cache.length > 25) {
-			article_cache.shift();
-		}
-	}
-}
-
-function cache_flush() {
-	if (has_local_storage()) {
-		sessionStorage.clear();
-	} else {
-		article_cache = new Array();
-	}
-}
-
-function cache_invalidate(id) {
-	try {
-		if (has_local_storage()) {
-
-			var found = false;
-
-			for (var i = 0; i < sessionStorage.length; i++) {
-				var key = sessionStorage.key(i);
-
-//					console.warn("cache_invalidate: " + key_id + " cmp " + id);
-
-				if (key == id || key.indexOf(id + ":") == 0) {
-					sessionStorage.removeItem(key);
-					found = true;
-					break;
-				}
-			}
-
-			return found;
-
-		} else {
-			var i = 0
-
-			while (i < article_cache.length) {
-				if (article_cache[i]["id"] == id) {
-					//console.log("cache_invalidate: removed id " + id);
-					article_cache.splice(i, 1);
-					return true;
-				}
-				i++;
-			}
-		}
-
-		//console.log("cache_invalidate: id not found: " + id);
-		return false;
-	} catch (e) {
-		exception_error("cache_invalidate", e);
-	}
-}
-
 function getActiveArticleId() {
 	return active_post_id;
 }
 
-function preloadBatchedArticles() {
-	try {
-
-		var query = "?op=rpc&subop=getArticles&ids=" +
-			preload_id_batch.toString();
-
-		new Ajax.Request("backend.php", {
-			parameters: query,
-			onComplete: function(transport) {
-
-				preload_id_batch = [];
-
-				var articles = JSON.parse(transport.responseText);
-
-				for (var i = 0; i < articles.length; i++) {
-					var id = articles[i]['id'];
-					if (!cache_check(id)) {
-						cache_inject(id, articles[i]['content']);
-						console.log("preloaded article: " + id);
-					}
-				}
-		} });
-
-	} catch (e) {
-		exception_error("preloadBatchedArticles", e);
-	}
-}
-
-function preloadArticleUnderPointer(id) {
-	try {
-		if (getInitParam("bw_limit") == "1") return;
-
-		if (post_under_pointer == id && !cache_check(id)) {
-
-			console.log("trying to preload article " + id);
-
-			var neighbor_ids = getRelativePostIds(id, 1);
-
-			/* only request uncached articles */
-
-			if (preload_id_batch.indexOf(id) == -1) {
-				for (var i = 0; i < neighbor_ids.length; i++) {
-					if (!cache_check(neighbor_ids[i])) {
-						preload_id_batch.push(neighbor_ids[i]);
-					}
-				}
-			}
-
-			if (preload_id_batch.indexOf(id) == -1)
-				preload_id_batch.push(id);
-
-			//console.log("preload ids batch: " + preload_id_batch.toString());
-
-			window.clearTimeout(preload_timeout_id);
-			preload_batch_timeout_id = window.setTimeout('preloadBatchedArticles()', 1000);
-
-		}
-	} catch (e) {
-		exception_error("preloadArticleUnderPointer", e);
-	}
-}
-
 function postMouseIn(id) {
-	try {
-		if (post_under_pointer != id) {
-			post_under_pointer = id;
-			if (!isCdmMode()) {
-				window.setTimeout("preloadArticleUnderPointer(" + id + ")", 250);
-			}
-		}
-
-	} catch (e) {
-		exception_error("postMouseIn", e);
-	}
+	post_under_pointer = id;
 }
 
 function postMouseOut(id) {
-	try {
-		post_under_pointer = false;
-	} catch (e) {
-		exception_error("postMouseOut", e);
-	}
+	post_under_pointer = false;
 }
 
 function headlines_scroll_handler(e) {
 	try {
+		var hsp = $("headlines-spacer");
 
-		if (e.scrollTop + e.offsetHeight > e.scrollHeight - 100) {
-			if (!_infscroll_disable) {
-				viewNextFeedPage();
+		if (!_infscroll_disable) {
+			if (hsp && (e.scrollTop + e.offsetHeight > hsp.offsetTop) ||
+					e.scrollTop + e.offsetHeight > e.scrollHeight - 100) {
+
+				hsp.innerHTML = "<img src='images/indicator_tiny.gif'> " +
+					__("Loading, please wait...");
+
+				loadMoreHeadlines();
+
+				//viewNextFeedPage();
 			}
+		} else {
+			if (hsp) hsp.innerHTML = "";
 		}
 
-
 		if (getInitParam("cdm_auto_catchup") == 1) {
-
-			var ids = [];
 
 			$$("#headlines-frame > div[id*=RROW][class*=Unread]").each(
 				function(child) {
 					if ($("headlines-frame").scrollTop >
-							(child.offsetTop + child.offsetHeight)) {
+							(child.offsetTop + child.offsetHeight/2)) {
 
-						ids.push(child.id.replace("RROW-", ""));
+						var id = child.id.replace("RROW-", "");
+
+						if (catchup_id_batch.indexOf(id) == -1)
+							catchup_id_batch.push(id);
 					}
 				});
 
-			if (ids.length > 0) {
-
-				var query = "?op=rpc&subop=catchupSelected" +
-					"&cmode=0&ids=" + param_escape(ids.toString());
-
-				new Ajax.Request("backend.php", {
-					parameters: query,
-					onComplete: function(transport) {
-						handle_rpc_json(transport);
-
-						ids.each(function(id) {
-							var elem = $("RROW-" + id);
-							if (elem) elem.removeClassName("Unread");
-						});
-					} });
+			if (catchup_id_batch.length > 0 && !_infscroll_request_sent) {
+				window.clearTimeout(catchup_timeout_id);
+				catchup_timeout_id = window.setTimeout('catchupBatchedArticles()',
+						1000);
 			}
 		}
+
 	} catch (e) {
-		exception_error("headlines_scroll_handler", e);
+		console.warn("headlines_scroll_handler: " + e);
+	}
+}
+
+function catchupBatchedArticles() {
+	try {
+		if (catchup_id_batch.length > 0 && !_infscroll_request_sent) {
+
+			var query = "?op=rpc&subop=catchupSelected" +
+				"&cmode=0&ids=" + param_escape(catchup_id_batch.toString());
+
+			new Ajax.Request("backend.php", {
+				parameters: query,
+				onComplete: function(transport) {
+					handle_rpc_json(transport);
+
+					catchup_id_batch.each(function(id) {
+						var elem = $("RROW-" + id);
+						if (elem) elem.removeClassName("Unread");
+					});
+
+					catchup_id_batch = [];
+				} });
+		}
+
+	} catch (e) {
+		exception_error("catchupBatchedArticles", e);
 	}
 }
 
@@ -1460,28 +1269,39 @@ function cdmExpandArticle(id) {
 
 				var query = "?op=rpc&subop=cdmGetArticle&id=" + param_escape(id);
 
-				//console.log(query);
+				var neighbor_ids = getRelativePostIds(id);
+
+				/* only request uncached articles */
+				var cids_to_request = [];
+
+				for (var i = 0; i < neighbor_ids.length; i++) {
+					if (cids_requested.indexOf(neighbor_ids[i]) == -1)
+						if ($("CWRAP-" + neighbor_ids[i]).innerHTML == "") {
+							cids_to_request.push(neighbor_ids[i]);
+							cids_requested.push(neighbor_ids[i]);
+						}
+				}
+
+				console.log("additional ids: " + cids_to_request.toString());
+
+				query = query + "&cids=" + cids_to_request.toString();
+
+				console.log(query);
 
 				new Ajax.Request("backend.php", {
 					parameters: query,
 					onComplete: function(transport) {
+
 						$("FUPDPIC-" + id).src = 'images/blank_icon.gif';
 
 						handle_rpc_json(transport);
 
 						var reply = JSON.parse(transport.responseText);
 
-						if (reply) {
-							var article = reply['article']['content'];
-							var recv_id = reply['article']['id'];
-
-							if (recv_id == id)
-								$("CWRAP-" + id).innerHTML = article;
-
-						} else {
-							$("CWRAP-" + id).innerHTML = __("Unable to load article.");
-
-						}
+						reply.each(function(article) {
+							$("CWRAP-" + article['id']).innerHTML = article['content']
+							cids_requested.remove(article['id']);
+						});
 				}});
 
 			}
@@ -1530,7 +1350,7 @@ function getArticleUnderPointer() {
 
 function zoomToArticle(event, id) {
 	try {
-		var cached_article = cache_find(id);
+		var cached_article = cache_get("article: " + id);
 
 		if (dijit.byId("ATAB-" + id))
 			if (!event || !event.shiftKey)
@@ -1626,13 +1446,16 @@ function show_labels_in_headlines(transport) {
 
 				if (ctr) ctr.innerHTML = elem.labels;
 			});
+
+			cache_headlines(getActiveFeedId(), activeFeedIsCat(), null, $("headlines-frame").innerHTML);
+
 		}
 	} catch (e) {
 		exception_error("show_labels_in_headlines", e);
 	}
 }
 
-function toggleHeadlineActions() {
+/* function toggleHeadlineActions() {
 	try {
 		var e = $("headlineActionsBody");
 		var p = $("headlineActionsDrop");
@@ -1650,7 +1473,7 @@ function toggleHeadlineActions() {
 	} catch (e) {
 		exception_error("toggleHeadlineActions", e);
 	}
-}
+} */
 
 /* function publishWithNote(id, def_note) {
 	try {
@@ -1965,14 +1788,14 @@ function getRelativePostIds(id, limit) {
 
 	try {
 
-		if (!limit) limit = 3;
+		if (!limit) limit = 6; //3
 
 		var ids = getVisibleArticleIds();
 
 		for (var i = 0; i < ids.length; i++) {
 			if (ids[i] == id) {
 				for (var k = 1; k <= limit; k++) {
-					if (i > k-1) tmp.push(ids[i-k]);
+					//if (i > k-1) tmp.push(ids[i-k]);
 					if (i < ids.length-k) tmp.push(ids[i+k]);
 				}
 				break;
@@ -2207,7 +2030,7 @@ function editArticleNote(id) {
 
 						var reply = JSON.parse(transport.responseText);
 
-						cache_invalidate(id);
+						cache_delete("article:" + id);
 
 						var elem = $("POSTNOTE-" + id);
 
@@ -2258,4 +2081,144 @@ function player(elem) {
 		alert("Your browser doesn't seem to support HTML5 audio.");
 	}
 }
+
+function cache_set(id, obj) {
+	//console.log("cache_set: " + id);
+	if (has_storage)
+		try {
+			sessionStorage[id] = obj;
+		} catch (e) {
+			sessionStorage.clear();
+		}
+}
+
+function cache_get(id) {
+	if (has_storage)
+		return sessionStorage[id];
+}
+
+function cache_clear() {
+	if (has_storage)
+		sessionStorage.clear();
+}
+
+function cache_delete(id) {
+	if (has_storage)
+		sessionStorage.removeItem(id);
+}
+
+function cache_headlines(feed, is_cat, toolbar_obj, content_obj) {
+	if (toolbar_obj && content_obj) {
+		cache_set("feed:" + feed + ":" + is_cat,
+			JSON.stringify({toolbar: toolbar_obj, content: content_obj}));
+	} else {
+		try {
+			obj =	cache_get("feed:" + feed + ":" + is_cat);
+
+			if (obj) {
+				obj = JSON.parse(obj);
+
+				if (toolbar_obj) obj.toolbar = toolbar_obj;
+				if (content_obj) obj.content = content_obj;
+
+				cache_set("feed:" + feed + ":" + is_cat, JSON.stringify(obj));
+			}
+
+		} catch (e) {
+			console.warn("cache_headlines failed: " + e);
+		}
+	}
+}
+
+function render_local_headlines(feed, is_cat, obj) {
+	try {
+
+		dijit.byId("headlines-toolbar").attr('content',
+			obj.toolbar);
+
+		dijit.byId("headlines-frame").attr('content',
+			obj.content);
+
+		dojo.parser.parse('headlines-toolbar');
+
+		$("headlines-frame").scrollTop = 0;
+		selectArticles('none');
+		setActiveFeedId(feed, is_cat);
+		initHeadlinesMenu();
+
+		precache_headlines();
+
+	} catch (e) {
+		exception_error("render_local_headlines", e);
+	}
+}
+
+function precache_headlines_idle() {
+	try {
+		if (!feed_precache_timeout_id) {
+			var feeds = dijit.byId("feedTree").getVisibleUnreadFeeds();
+			var uncached = [];
+
+			feeds.each(function(item) {
+				if (parseInt(item[0]) > 0 && !cache_get("feed:" + item[0] + ":" + item[1]))
+					uncached.push(item);
+			});
+
+			if (uncached.length > 0) {
+				var rf = uncached[Math.floor(Math.random()*uncached.length)];
+				viewfeed(rf[0], '', rf[1], 0, true);
+			}
+		}
+		precache_idle_timeout_id = setTimeout("precache_headlines_idle()", 5000);
+
+	} catch (e) {
+		exception_error("precache_headlines_idle", e);
+	}
+}
+
+function precache_headlines() {
+	try {
+
+		if (!feed_precache_timeout_id) {
+			feed_precache_timeout_id = window.setTimeout(function() {
+				var nuf = getNextUnreadFeed(getActiveFeedId(), activeFeedIsCat());
+				var nf = dijit.byId("feedTree").getNextFeed(getActiveFeedId(), activeFeedIsCat());
+
+				if (nuf && !cache_get("feed:" + nuf + ":" + activeFeedIsCat()))
+					viewfeed(nuf, '', activeFeedIsCat(), 0, true);
+
+				if (nf != nuf && nf && !cache_get("feed:" + nf[0] + ":" + nf[1]))
+					viewfeed(nf[0], '', nf[1], 0, true);
+
+				window.setTimeout(function() {
+					feed_precache_timeout_id = false;
+					}, 3000);
+			}, 1000);
+		}
+
+	} catch (e) {
+		exception_error("precache_headlines", e);
+	}
+}
+
+function shareArticle(id) {
+	try {
+		if (dijit.byId("shareArticleDlg"))
+			dijit.byId("shareArticleDlg").destroyRecursive();
+
+		var query = "backend.php?op=dlg&id=shareArticle&param=" + param_escape(id);
+
+		dialog = new dijit.Dialog({
+			id: "shareArticleDlg",
+			title: __("Share article by URL"),
+			style: "width: 600px",
+			href: query});
+
+		dialog.show();
+
+	} catch (e) {
+		exception_error("emailArticle", e);
+	}
+}
+
 

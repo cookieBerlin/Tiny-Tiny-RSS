@@ -1329,7 +1329,7 @@
 
 		print "<div style='float : right; padding-right : 4px;'>
 			<input dojoType=\"dijit.form.TextBox\" id=\"feed_search\" size=\"20\" type=\"search\"
-				onchange=\"updateFeedList()\" value=\"$feed_search\">
+				value=\"$feed_search\">
 			<button dojoType=\"dijit.form.Button\" onclick=\"updateFeedList()\">".
 				__('Search')."</button>
 			</div>";
@@ -1430,30 +1430,42 @@
 
 		print "<div dojoType=\"dijit.layout.AccordionPane\" title=\"".__('OPML')."\">";
 
-		print "<p>" . __("Using OPML you can export and import your feeds and Tiny Tiny RSS settings.");
+		print "<p>" . __("Using OPML you can export and import your feeds and Tiny Tiny RSS settings.") . " ";
 
-		print "<div class=\"insensitive\">" . __("Note: Only main settings profile can be migrated using OPML.") . "</div>";
+		print "<span class=\"insensitive\">" . __("Note: Only main settings profile can be migrated using OPML.") . "</span>";
 
 		print "</p>";
 
-		print "<iframe id=\"upload_iframe\"
+		print "<h3>" . __("Import") . "</h3>";
+
+		print "<br/><iframe id=\"upload_iframe\"
 			name=\"upload_iframe\" onload=\"opmlImportComplete(this)\"
 			style=\"width: 400px; height: 100px; display: none;\"></iframe>";
 
-		print "<form style='display : block' target=\"upload_iframe\"
+		print "<form  name=\"opml_form\" style='display : block' target=\"upload_iframe\"
 			enctype=\"multipart/form-data\" method=\"POST\"
 				action=\"backend.php\">
 			<input id=\"opml_file\" name=\"opml_file\" type=\"file\">&nbsp;
 			<input type=\"hidden\" name=\"op\" value=\"dlg\">
 			<input type=\"hidden\" name=\"id\" value=\"importOpml\">
-			<button dojoType=\"dijit.form.Button\" onclick=\"return opmlImport();\"
-				type=\"submit\">".__('Import')."</button>
-			<button dojoType=\"dijit.form.Button\" onclick=\"gotoExportOpml()\">".__('Export OPML')."</button>
-			</form>";
+			<button dojoType=\"dijit.form.Button\" onclick=\"return opmlImport();\" type=\"submit\">" .
+			__('Import') . "</button>";
 
-		print "<p>".__('Your OPML can be published publicly and can be subscribed by anyone who knows the URL below.');
+		print "<h3>" . __("Export") . "</h3>";
 
-		print "<div class=\"insensitive\">" . __("Note: Published OPML does not include your Tiny Tiny RSS settings, feeds that require authentication or feeds hidden from Popular feeds.") . 			"</div>" . "</p>";
+		print "<p>" . __('Filename:') .
+            " <input type=\"text\" id=\"filename\" value=\"TinyTinyRSS.opml\" />&nbsp;" .
+            __('Include settings') . "<input type=\"checkbox\" id=\"settings\" CHECKED />" .
+
+			"<button dojoType=\"dijit.form.Button\"
+			onclick=\"gotoExportOpml(document.opml_form.filename.value, document.opml_form.settings.checked)\" >" .
+              __('Export') . "</button></p></form>";
+
+		print "<h3>" . __("Publish") . "</h3>";
+
+		print "<p>".__('Your OPML can be published publicly and can be subscribed by anyone who knows the URL below.') . " ";
+
+		print "<span class=\"insensitive\">" . __("Note: Published OPML does not include your Tiny Tiny RSS settings, feeds that require authentication or feeds hidden from Popular feeds.") . 			"</span>" . "</p>";
 
 		print "<button dojoType=\"dijit.form.Button\" onclick=\"return displayDlg('pubOPMLUrl')\">".
 			__('Display URL')."</button> ";
@@ -1494,7 +1506,9 @@
 
 		print "</div>"; #pane
 
-		print "<div dojoType=\"dijit.layout.AccordionPane\" title=\"".__('Published articles and generated feeds')."\">";
+		print "<div dojoType=\"dijit.layout.AccordionPane\" title=\"".__('Published & shared articles and generated feeds')."\">";
+
+		print "<h3>" . __("Published articles and generated feeds") . "</h3>";
 
 		print "<p>".__('Published articles are exported as a public RSS feed and can be subscribed by anyone who knows the URL specified below.')."</p>";
 
@@ -1506,6 +1520,13 @@
 
 		print "<button dojoType=\"dijit.form.Button\" onclick=\"return clearFeedAccessKeys()\">".
 			__('Clear all generated URLs')."</button> ";
+
+		print "<h3>" . __("Articles shared by URL") . "</h3>";
+
+		print "<p>" . __("You can disable all articles shared by unique URLs here.") . "</p>";
+
+		print "<button dojoType=\"dijit.form.Button\" onclick=\"return clearArticleAccessKeys()\">".
+			__('Unshare all articles')."</button> ";
 
 		print "</div>"; #pane
 

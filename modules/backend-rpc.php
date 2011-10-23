@@ -15,7 +15,7 @@
 
 		// Silent
 		if ($subop == "remprofiles") {
-			$ids = split(",", db_escape_string(trim($_REQUEST["ids"])));
+			$ids = explode(",", db_escape_string(trim($_REQUEST["ids"])));
 
 			foreach ($ids as $id) {
 				if ($_SESSION["profile"] != $id) {
@@ -91,7 +91,7 @@
 
 		// Silent
 		if ($subop == "remarchive") {
-			$ids = split(",", db_escape_string($_REQUEST["ids"]));
+			$ids = explode(",", db_escape_string($_REQUEST["ids"]));
 
 			foreach ($ids as $id) {
 				$result = db_query($link, "DELETE FROM ttrss_archived_feeds WHERE
@@ -186,7 +186,7 @@
 		}
 
 		if ($subop == "archive") {
-			$ids = split(",", db_escape_string($_REQUEST["ids"]));
+			$ids = explode(",", db_escape_string($_REQUEST["ids"]));
 
 			foreach ($ids as $id) {
 				archive_article($link, $id, $_SESSION["uid"]);
@@ -260,7 +260,7 @@
 
 		/* GET["cmode"] = 0 - mark as read, 1 - as unread, 2 - toggle */
 		if ($subop == "catchupSelected") {
-			$ids = split(",", db_escape_string($_REQUEST["ids"]));
+			$ids = explode(",", db_escape_string($_REQUEST["ids"]));
 			$cmode = sprintf("%d", $_REQUEST["cmode"]);
 
 			catchupArticlesById($link, $ids, $cmode);
@@ -270,7 +270,7 @@
 		}
 
 		if ($subop == "markSelected") {
-			$ids = split(",", db_escape_string($_REQUEST["ids"]));
+			$ids = explode(",", db_escape_string($_REQUEST["ids"]));
 			$cmode = sprintf("%d", $_REQUEST["cmode"]);
 
 			markArticlesById($link, $ids, $cmode);
@@ -280,7 +280,7 @@
 		}
 
 		if ($subop == "publishSelected") {
-			$ids = split(",", db_escape_string($_REQUEST["ids"]));
+			$ids = explode(",", db_escape_string($_REQUEST["ids"]));
 			$cmode = sprintf("%d", $_REQUEST["cmode"]);
 
 			publishArticlesById($link, $ids, $cmode);
@@ -320,7 +320,7 @@
 			$id = db_escape_string($_REQUEST["id"]);
 
 			$tags_str = db_escape_string($_REQUEST["tags_str"]);
-			$tags = array_unique(trim_array(split(",", $tags_str)));
+			$tags = array_unique(trim_array(explode(",", $tags_str)));
 
 			db_query($link, "BEGIN");
 
@@ -359,7 +359,8 @@
 
 				/* update tag cache */
 
-				$tags_str = asort(join(",", $tags_to_cache));
+				sort($tags_to_cache);
+				$tags_str = join(",", $tags_to_cache);
 
 				db_query($link, "UPDATE ttrss_user_entries
 					SET tag_cache = '$tags_str' WHERE ref_id = '$id'
@@ -413,7 +414,7 @@
 		}
 
 		if ($subop == "purge") {
-			$ids = split(",", db_escape_string($_REQUEST["ids"]));
+			$ids = explode(",", db_escape_string($_REQUEST["ids"]));
 			$days = sprintf("%d", $_REQUEST["days"]);
 
 			foreach ($ids as $id) {
@@ -443,7 +444,7 @@
 		} */
 
 		if ($subop == "getArticles") {
-			$ids = split(",", db_escape_string($_REQUEST["ids"]));
+			$ids = explode(",", db_escape_string($_REQUEST["ids"]));
 			$articles = array();
 
 			foreach ($ids as $id) {
@@ -468,7 +469,7 @@
 		if ($subop == "assignToLabel" || $subop == "removeFromLabel") {
 			$reply = array();
 
-			$ids = split(",", db_escape_string($_REQUEST["ids"]));
+			$ids = explode(",", db_escape_string($_REQUEST["ids"]));
 			$label_id = db_escape_string($_REQUEST["lid"]);
 
 			$label = db_escape_string(label_find_caption($link, $label_id,
@@ -559,7 +560,7 @@
 				}
 			}
 
-/*			$ids = split(",", db_escape_string($_REQUEST["ids"]));
+/*			$ids = explode(",", db_escape_string($_REQUEST["ids"]));
 
 			$subscribed = array();
 
@@ -603,14 +604,22 @@
 		if ($subop == "digest-get-contents") {
 			$article_id = db_escape_string($_REQUEST['article_id']);
 
-			$result = db_query($link, "SELECT content
+			$result = db_query($link, "SELECT content,title,link,marked,published
 				FROM ttrss_entries, ttrss_user_entries
 				WHERE id = '$article_id' AND ref_id = id AND owner_uid = ".$_SESSION['uid']);
 
 			$content = sanitize_rss($link, db_fetch_result($result, 0, "content"));
+			$title = strip_tags(db_fetch_result($result, 0, "title"));
+			$article_url = htmlspecialchars(db_fetch_result($result, 0, "link"));
+			$marked = sql_bool_to_bool(db_fetch_result($result, 0, "marked"));
+			$published = sql_bool_to_bool(db_fetch_result($result, 0, "published"));
+
 
 			print json_encode(array("article" =>
-				array("id" => $id, "content" => $content)));
+				array("id" => $article_id, "url" => $article_url,
+					"tags" => get_article_tags($link, $article_id),
+					"marked" => $marked, "published" => $published,
+					"title" => $title, "content" => $content)));
 			return;
 		}
 
@@ -626,8 +635,8 @@
 
 			$reply['seq'] = $seq;
 
-			$headlines = api_get_headlines($link, $feed_id, 10, $offset,
-				'', ($feed_id == -4), true, false, "unread", "updated DESC");
+			$headlines = api_get_headlines($link, $feed_id, 30, $offset,
+				'', ($feed_id == -4), true, false, "unread", "updated DESC", 0, 0);
 
 			//function api_get_headlines($link, $feed_id, $limit, $offset,
 			//		$filter, $is_cat, $show_excerpt, $show_content, $view_mode) {
@@ -641,7 +650,7 @@
 		}
 
 		if ($subop == "digest-init") {
-			$tmp_feeds = api_get_feeds($link, -3, true, false, 0);
+			$tmp_feeds = api_get_feeds($link, -4, true, false, 0);
 
 			$feeds = array();
 
@@ -656,10 +665,11 @@
 
 		if ($subop == "catchupFeed") {
 			$feed_id = db_escape_string($_REQUEST['feed_id']);
-			$is_cat = db_escape_string($_REQUEST['is_cat']);
+			$is_cat = db_escape_string($_REQUEST['is_cat']) == "true";
 
 			catchup_feed($link, $feed_id, $is_cat);
 
+			print json_encode(array("message" => "UPDATE_COUNTERS"));
 			return;
 		}
 
@@ -757,7 +767,7 @@
 
 		if ($subop == "regenFeedKey") {
 			$feed_id = db_escape_string($_REQUEST['id']);
-			$is_cat = (bool) db_escape_string($_REQUEST['is_cat']);
+			$is_cat = db_escape_string($_REQUEST['is_cat']) == "true";
 
 			$new_key = update_feed_access_key($link, $feed_id, $is_cat);
 
@@ -773,6 +783,15 @@
 			return;
 		}
 
+		// Silent
+		if ($subop == "clearArticleKeys") {
+			db_query($link, "UPDATE ttrss_user_entries SET uuid = '' WHERE
+				owner_uid = " . $_SESSION["uid"]);
+
+			return;
+		}
+
+
 		if ($subop == "verifyRegexp") {
 			$reg_exp = $_REQUEST["reg_exp"];
 
@@ -784,27 +803,35 @@
 
 		// TODO: unify with digest-get-contents?
 		if ($subop == "cdmGetArticle") {
-			$id = db_escape_string($_REQUEST["id"]);
+			$ids = array(db_escape_string($_REQUEST["id"]));
+			$cids = explode(",", $_REQUEST["cids"]);
 
-			$result = db_query($link, "SELECT content,
-				ttrss_feeds.site_url AS site_url FROM ttrss_user_entries, ttrss_feeds,
-				ttrss_entries
-				WHERE feed_id = ttrss_feeds.id AND ref_id = '$id' AND
-				ttrss_entries.id = ref_id AND
-				ttrss_user_entries.owner_uid = ".$_SESSION["uid"]);
+			$ids = array_merge($ids, $cids);
 
-			if (db_num_rows($result) != 0) {
-				$line = db_fetch_assoc($result);
+			$rv = array();
 
-				$article_content = sanitize_rss($link, $line["content"],
-					false, false, $line['site_url']);
+			foreach ($ids as $id) {
+				$id = (int)$id;
 
-			} else {
-				$article_content = '';
+				$result = db_query($link, "SELECT content,
+					ttrss_feeds.site_url AS site_url FROM ttrss_user_entries, ttrss_feeds,
+					ttrss_entries
+					WHERE feed_id = ttrss_feeds.id AND ref_id = '$id' AND
+					ttrss_entries.id = ref_id AND
+					ttrss_user_entries.owner_uid = ".$_SESSION["uid"]);
+
+				if (db_num_rows($result) != 0) {
+					$line = db_fetch_assoc($result);
+
+					$article_content = sanitize_rss($link, $line["content"],
+						false, false, $line['site_url']);
+
+					array_push($rv,
+						array("id" => $id, "content" => $article_content));
+				}
 			}
 
-			print json_encode(array("article" =>
-				array("id" => $id, "content" => $article_content)));
+			print json_encode($rv);
 
 			return;
 		}

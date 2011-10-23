@@ -14,8 +14,10 @@
 		$_REQUEST = array_map('stripslashes_deep', $_REQUEST);
 	}
 
+	$op = $_REQUEST["op"];
+
 	require_once "functions.php";
-	require_once "sessions.php";
+	if ($op != "share") require_once "sessions.php";
 	require_once "modules/backend-rpc.php";
 	require_once "sanity_check.php";
 	require_once "config.php";
@@ -40,7 +42,6 @@
 
 	init_connection($link);
 
-	$op = $_REQUEST["op"];
 	$subop = $_REQUEST["subop"];
 	$mode = $_REQUEST["mode"];
 
@@ -59,7 +60,7 @@
 	}
 
 	if (!($_SESSION["uid"] && validate_session($link)) && $op != "globalUpdateFeeds" &&
-			$op != "rss" && $op != "getUnread" && $op != "getProfiles" &&
+			$op != "rss" && $op != "getUnread" && $op != "getProfiles" && $op != "share" &&
 			$op != "fbexport" && $op != "logout" && $op != "pubsub") {
 
 		if ($op == 'pref-feeds' && $_REQUEST['subop'] == 'add') {
@@ -205,7 +206,7 @@
 		case "view":
 
 			$id = db_escape_string($_REQUEST["id"]);
-			$cids = split(",", db_escape_string($_REQUEST["cids"]));
+			$cids = explode(",", db_escape_string($_REQUEST["cids"]));
 			$mode = db_escape_string($_REQUEST["mode"]);
 			$omode = db_escape_string($_REQUEST["omode"]);
 
@@ -217,7 +218,7 @@
 			if ($mode == "") {
 				array_push($articles, format_article($link, $id, false));
 			} else if ($mode == "zoom") {
-				array_push($articles, format_article($link, $id, false, true, true));
+				array_push($articles, format_article($link, $id, true, true));
 			} else if ($mode == "raw") {
 				if ($_REQUEST['html']) {
 					header("Content-Type: text/html");
@@ -227,9 +228,9 @@
 				$article = format_article($link, $id, false);
 				print $article['content'];
 				return;
-			} else {
-				catchupArticleById($link, $id, 0);
 			}
+
+			catchupArticleById($link, $id, 0);
 
 			if (!$_SESSION["bw_limit"]) {
 				foreach ($cids as $cid) {
@@ -257,11 +258,13 @@
 			$subop = db_escape_string($_REQUEST["subop"]);
 			$view_mode = db_escape_string($_REQUEST["view_mode"]);
 			$limit = (int) get_pref($link, "DEFAULT_ARTICLE_LIMIT");
-			@$cat_view = db_escape_string($_REQUEST["cat"]);
+			@$cat_view = db_escape_string($_REQUEST["cat"]) == "true";
 			@$next_unread_feed = db_escape_string($_REQUEST["nuf"]);
 			@$offset = db_escape_string($_REQUEST["skip"]);
 			@$vgroup_last_feed = db_escape_string($_REQUEST["vgrlf"]);
 			$order_by = db_escape_string($_REQUEST["order_by"]);
+
+			if (is_numeric($feed)) $feed = (int) $feed;
 
 			/* Feed -5 is a special case: it is used to display auxiliary information
 			 * when there's nothing to load - e.g. no stuff in fresh feed */
@@ -277,10 +280,10 @@
 				$label_feed = -11-$feed;
 				$result = db_query($link, "SELECT id FROM ttrss_labels2 WHERE
 					id = '$label_feed' AND owner_uid = " . $_SESSION['uid']);
-			} else if (!$cat_view && $feed > 0) {
+			} else if (!$cat_view && is_numeric($feed) && $feed > 0) {
 				$result = db_query($link, "SELECT id FROM ttrss_feeds WHERE
 					id = '$feed' AND owner_uid = " . $_SESSION['uid']);
-			} else if ($cat_view && $feed > 0) {
+			} else if ($cat_view && is_numeric($feed) && $feed > 0) {
 				$result = db_query($link, "SELECT id FROM ttrss_feed_categories WHERE
 					id = '$feed' AND owner_uid = " . $_SESSION['uid']);
 			}
@@ -361,21 +364,15 @@
 			$disable_cache = $ret[3];
 			$vgroup_last_feed = $ret[4];
 
-			$reply['headlines']['content'] = $ret[5];
-			$reply['headlines']['toolbar'] = $ret[6];
+//			if ($_REQUEST["debug"]) print_r($ret);
+
+			$reply['headlines']['content'] =& $ret[5]['content'];
+			$reply['headlines']['toolbar'] =& $ret[5]['toolbar'];
 
 			if ($_REQUEST["debug"]) $timing_info = print_checkpoint("05", $timing_info);
 
-			$headlines_unread = ccache_find($link, $returned_feed, $_SESSION["uid"],
-					$cat_view, true);
-
-			if ($headlines_unread == -1) {
-				$headlines_unread = getFeedUnread($link, $returned_feed, $cat_view);
-			}
-
 			$reply['headlines-info'] = array("count" => (int) $headlines_count,
 				"vgroup_last_feed" => $vgroup_last_feed,
-				"unread" => (int) $headlines_unread,
 				"disable_cache" => (bool) $disable_cache);
 
 			if ($_REQUEST["debug"]) $timing_info = print_checkpoint("20", $timing_info);
@@ -384,15 +381,15 @@
 				$articles = array();
 
 				foreach ($topmost_article_ids as $id) {
-					array_push($articles, format_article($link, $id, $feed, false));
+					array_push($articles, format_article($link, $id, false));
 				}
 
 				$reply['articles'] = $articles;
 			}
 
-			if ($subop) {
-				$reply['counters'] = getAllCounters($link, $omode, $feed);
-			}
+//			if ($subop) {
+//				$reply['counters'] = getAllCounters($link, $omode, $feed);
+//			}
 
 			if ($_REQUEST["debug"]) $timing_info = print_checkpoint("30", $timing_info);
 
@@ -545,8 +542,14 @@
 
 		case "pubsub":
 			$mode = db_escape_string($_REQUEST['hub_mode']);
-			$feed_id = db_escape_string($_REQUEST['id']);
+			$feed_id = (int) db_escape_string($_REQUEST['id']);
 			$feed_url = db_escape_string($_REQUEST['hub_topic']);
+
+			if (!PUBSUBHUBBUB_ENABLED) {
+				header('HTTP/1.0 404 Not Found');
+				echo "404 Not found";
+				return;
+			}
 
 			// TODO: implement hub_verifytoken checking
 
@@ -577,8 +580,12 @@
 					} else if (!$mode) {
 
 						// Received update ping, schedule feed update.
+						//update_rss_feed($link, $feed_id, true, true);
 
-						update_rss_feed($link, $feed_id, true, true);
+						db_query($link, "UPDATE ttrss_feeds SET
+							last_update_started = '1970-01-01',
+							last_updated = '1970-01-01' WHERE id = '$feed_id' AND
+							owner_uid = ".$_SESSION["uid"]);
 
 					}
 				} else {
@@ -626,6 +633,30 @@
 				print json_encode(array("error" => array("code" => 6)));
 			}
 		break; // fbexport
+
+		case "share":
+			$uuid = db_escape_string($_REQUEST["key"]);
+
+			$result = db_query($link, "SELECT ref_id, owner_uid FROM ttrss_user_entries WHERE
+				uuid = '$uuid'");
+
+			if (db_num_rows($result) != 0) {
+				header("Content-Type: text/html");
+
+				$id = db_fetch_result($result, 0, "ref_id");
+				$owner_uid = db_fetch_result($result, 0, "owner_uid");
+
+				$_SESSION["uid"] = $owner_uid;
+				$article = format_article($link, $id, false, true);
+				$_SESSION["uid"] = "";
+
+				print_r($article['content']);
+
+			} else {
+				print "Article not found.";
+			}
+
+			break;
 
 		default:
 			header("Content-Type: text/plain");

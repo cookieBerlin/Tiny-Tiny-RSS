@@ -2,7 +2,7 @@
 	require_once "functions.php";
 
 	define('EXPECTED_CONFIG_VERSION', 23);
-	define('SCHEMA_VERSION', 85);
+	define('SCHEMA_VERSION', 86);
 
 	if (!file_exists("config.php")) {
 		print "<b>Fatal Error</b>: You forgot to copy
@@ -115,9 +115,9 @@
 		$err_msg = "config: your ICONS_DIR (" . ICONS_DIR . ") is not writable.\n";
 	}
 
-/*	if (ini_get("open_basedir")) {
+	if (ini_get("open_basedir")) {
 		$err_msg = "php.ini: open_basedir is not supported.";
-} */
+	}
 
 	if (!function_exists("curl_init") && !ini_get("allow_url_fopen")) {
 		$err_msg = "php.ini: either allow_url_fopen or CURL needs to be enabled.";
@@ -139,6 +139,10 @@
 		$err_msg = "PHP: mbstring functions not found.";
 	}
 
+	if (!function_exists("ctype_lower")) {
+		$err_msg = "PHP: ctype functions not found (required for HTMLPurifier).";
+	}
+
 	if (ini_get("safe_mode")) {
 		$err_msg = "php.ini: Safe mode is not supported. If you wish to continue, remove this test from sanity_check.php and proceeed at your own risk. Please note that your bug reports will not be accepted or reviewed.";
 	}
@@ -149,6 +153,10 @@
 
 	if (!class_exists("DOMDocument")) {
 		$err_msg = "PHP: DOMDocument extension not found.";
+	}
+
+	if (SELF_URL_PATH == "http://local.host/tt-rss") {
+		$err_msg = "config: please set SELF_URL_PATH to the correct value";
 	}
 
 	if (!ISCONFIGURED) {

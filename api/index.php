@@ -51,7 +51,7 @@
 	$op = db_escape_string($_REQUEST["op"]);
 	$seq = (int) $_REQUEST["seq"];
 
-//	header("Content-Type: application/json");
+	header("Content-Type: text/plain");
 
 	function api_wrap_reply($status, $seq, $reply) {
 		print json_encode(array("seq" => $seq,
@@ -196,10 +196,11 @@
 			/* all_articles, unread, adaptive, marked, updated */
 			$view_mode = db_escape_string($_REQUEST["view_mode"]);
 			$include_attachments = (bool)db_escape_string($_REQUEST["include_attachments"]);
+			$since_id = (int)db_escape_string($_REQUEST["since_id"]);
 
 			$headlines = api_get_headlines($link, $feed_id, $limit, $offset,
 				$filter, $is_cat, $show_excerpt, $show_content, $view_mode, false,
-				$include_attachments);
+				$include_attachments, $since_id);
 
 			print api_wrap_reply(API_STATUS_OK, $seq, $headlines);
 

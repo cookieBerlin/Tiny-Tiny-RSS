@@ -737,8 +737,38 @@
 			print "</div>";
 
 			print "]]></content>";
+		}
 
-			//return;
+		if ($id == 'printTagSelect') {
+			print "<title>" . __('Select item(s) by tags') . "</title>";
+			print "<content><![CDATA[";
+
+			print __("Match:"). "&nbsp;" .
+				  "<input class=\"noborder\" dojoType=\"dijit.form.RadioButton\" type=\"radio\" checked value=\"any\" name=\"tag_mode\">&nbsp;Any&nbsp;";
+			print "<input class=\"noborder\" dojoType=\"dijit.form.RadioButton\" type=\"radio\" value=\"all\" name=\"tag_mode\">&nbsp;All&nbsp;";
+			print "&nbsp;tags.";
+
+			print "<select id=\"all_tags\" name=\"all_tags\" title=\"" . __('Which Tags?') . "\" multiple=\"multiple\" size=\"10\" style=\"width : 100%\">";
+			$result = db_query($link, "SELECT DISTINCT tag_name FROM ttrss_tags WHERE owner_uid = ".$_SESSION['uid']."
+				AND LENGTH(tag_name) <= 30 ORDER BY tag_name ASC");
+
+			while ($row = db_fetch_assoc($result)) {
+				$tmp = htmlspecialchars($row["tag_name"]);
+				print "<option value=\"" . str_replace(" ", "%20", $tmp) . "\">$tmp</option>";
+			}
+
+			print "</select>";
+
+			print "<div align='right'>";
+			print "<button dojoType=\"dijit.form.Button\" onclick=\"viewfeed(get_all_tags($('all_tags')),
+				get_radio_checked($('tag_mode')));\">" . __('Display entries') . "</button>";
+			print "&nbsp;";
+			print "<button dojoType=\"dijit.form.Button\"
+			onclick=\"return closeInfoBox()\">" .
+				__('Close this window') . "</button>";
+			print "</div>";
+
+			print "]]></content>";
 		}
 
 		if ($id == "emailArticle") {
@@ -1041,12 +1071,52 @@
 					__('Cancel')."</button></div>";
 
 			return;
+		}
 
+		if ($id == "shareArticle") {
 
+			$result = db_query($link, "SELECT uuid, ref_id FROM ttrss_user_entries WHERE int_id = '$param'
+				AND owner_uid = " . $_SESSION['uid']);
 
+			if (db_num_rows($result) == 0) {
+				print "Article not found.";
+			} else {
 
+				$uuid = db_fetch_result($result, 0, "uuid");
+				$ref_id = db_fetch_result($result, 0, "ref_id");
+
+				if (!$uuid) {
+					$uuid = db_escape_string(sha1(uniqid(rand(), true)));
+					db_query($link, "UPDATE ttrss_user_entries SET uuid = '$uuid' WHERE int_id = '$param'
+						AND owner_uid = " . $_SESSION['uid']);
+				}
+
+				print __("You can share this article by the following unique URL:");
+
+				$url_path = get_self_url_prefix();
+				$url_path .= "/backend.php?op=share&key=$uuid";
+
+				print "<div class=\"tagCloudContainer\">";
+				print "<a id='pub_opml_url' href='$url_path' target='_blank'>$url_path</a>";
+				print "</div>";
+
+				/* if (!label_find_id($link, __('Shared'), $_SESSION["uid"]))
+					label_create($link, __('Shared'), $_SESSION["uid"]);
+
+				label_add_article($link, $ref_id, __('Shared'), $_SESSION['uid']); */
+			}
+
+			print "<div align='center'>";
+
+			print "<button dojoType=\"dijit.form.Button\" onclick=\"return dijit.byId('shareArticleDlg').hide()\">".
+				__('Close this window')."</button>";
+
+			print "</div>";
+
+			return;
 		}
 
 		print "</dlg>";
+
 	}
 ?>

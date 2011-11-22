@@ -420,6 +420,7 @@ a.helpLink:hover {
 	font-size : 12px;
 	background : transparent;
 	border-width : 0px;
+	color : gray;
 }
 
 #content-insert blockquote, #headlines-frame blockquote, .dijitContentPane blockquote {
@@ -440,6 +441,7 @@ a.helpLink:hover {
 	font-family : monospace;
 	padding : 0px;
 	font-size : 12px;
+	color : black;
 }
 
 div.notice {
@@ -747,16 +749,6 @@ div.browserFeedInfo div.detailsPart {
 	border-width : 0px;
 }
 
-#dialog_overlay {
-	left : 0;
-	top : 0;
-	height : 100%;
-	width : 100%;
-	z-index : 4;
-	position : absolute;
-	background-image : url("images/shadow_white.png");
-}
-
 #overlay {
 	background : white;
 	left : 0;
@@ -1038,6 +1030,9 @@ div#hotkey_help_overlay {
 	z-index : 999;
 	color : white;
 	font-size : 15px;
+	background : black;
+	border-radius : 30px;
+	padding : 10px;
 }
 
 div#hotkey_help_overlay h1 {
@@ -1087,43 +1082,6 @@ div#hotkey_help_overlay h2 {
 	margin : 0.3em 0px 0.3em 0px;
 	text-align : center;
 	color : #88b0f0;
-}
-
-div#hotkey_help_overlay table.hho td.c1 {
-	height : 30px;
-	width : 30px;
-	background : url("images/c1.png");
-	background-repeat : no-repeat;
-
-}
-
-div#hotkey_help_overlay table.hho td.c2 {
-	height : 30px;
-	width : 30px;
-	background : url("images/c2.png");
-	background-repeat : no-repeat;
-}
-
-div#hotkey_help_overlay table.hho td.c3 {
-	height : 30px;
-	width : 30px;
-	background : url("images/c3.png");
-	background-repeat : no-repeat;
-}
-
-div#hotkey_help_overlay table.hho td.c4 {
-	height : 30px;
-	width : 30px;
-	background : url("images/c4.png");
-	background-repeat : no-repeat;
-}
-
-div#hotkey_help_overlay table.hho td.top,
-div#hotkey_help_overlay table.hho td.left,
-div#hotkey_help_overlay table.hho td.right,
-div#hotkey_help_overlay table.hho td.bottom,
-div#hotkey_help_overlay table.hho td.content {
-	background : url("images/shadow_dark.png");	
 }
 
 div#hotkey_help_overlay table.hho td.top,
@@ -1365,6 +1323,7 @@ div.fatalError textarea {
 	border-left-width : 0px;
 	border-bottom-width : 0px;
 	border-top-width : 0px;
+	overflow : auto;
 }
 
 #headlines-wrap-inner {
@@ -1425,6 +1384,7 @@ div.fatalError textarea {
 	border-bottom-width : 0px;
 	border-right-width : 0px;
 	border-left-width : 0px;
+	overflow : auto;
 }
 
 .dijitTreeLabel.Unread {

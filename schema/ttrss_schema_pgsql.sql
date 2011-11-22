@@ -1,34 +1,34 @@
-drop table ttrss_linked_feeds;
-drop table ttrss_linked_instances;
-drop table ttrss_access_keys;
-drop table ttrss_user_labels2;
-drop table ttrss_labels2;
-drop table ttrss_feedbrowser_cache;
-drop table ttrss_version;
-drop table ttrss_labels;
-drop table ttrss_filters;
-drop table ttrss_filter_types;
-drop table ttrss_filter_actions;
-drop table ttrss_user_prefs;
-drop table ttrss_prefs;
-drop table ttrss_prefs_types;
-drop table ttrss_prefs_sections;
-drop table ttrss_tags;
-drop table ttrss_enclosures;
-drop table ttrss_settings_profiles;
-drop table ttrss_entry_comments;
-drop table ttrss_user_entries;
-drop table ttrss_entries;
-drop table ttrss_scheduled_updates;
-drop table ttrss_counters_cache;
-drop table ttrss_cat_counters_cache;
-drop table ttrss_archived_feeds;
-drop table ttrss_feeds;
-drop table ttrss_feed_categories;
-drop table ttrss_users;
-drop table ttrss_themes;
-drop table ttrss_sessions;
-drop function SUBSTRING_FOR_DATE(timestamp, int, int);
+drop table if exists ttrss_linked_feeds;
+drop table if exists ttrss_linked_instances;
+drop table if exists ttrss_access_keys;
+drop table if exists ttrss_user_labels2;
+drop table if exists ttrss_labels2;
+drop table if exists ttrss_feedbrowser_cache;
+drop table if exists ttrss_version;
+drop table if exists ttrss_labels;
+drop table if exists ttrss_filters;
+drop table if exists ttrss_filter_types;
+drop table if exists ttrss_filter_actions;
+drop table if exists ttrss_user_prefs;
+drop table if exists ttrss_prefs;
+drop table if exists ttrss_prefs_types;
+drop table if exists ttrss_prefs_sections;
+drop table if exists ttrss_tags;
+drop table if exists ttrss_enclosures;
+drop table if exists ttrss_settings_profiles;
+drop table if exists ttrss_entry_comments;
+drop table if exists ttrss_user_entries;
+drop table if exists ttrss_entries;
+drop table if exists ttrss_scheduled_updates;
+drop table if exists ttrss_counters_cache;
+drop table if exists ttrss_cat_counters_cache;
+drop table if exists ttrss_archived_feeds;
+drop table if exists ttrss_feeds;
+drop table if exists ttrss_feed_categories;
+drop table if exists ttrss_users;
+drop table if exists ttrss_themes;
+drop table if exists ttrss_sessions;
+drop function if exists SUBSTRING_FOR_DATE(timestamp, int, int);
 
 begin;
 
@@ -269,7 +269,7 @@ insert into ttrss_prefs (pref_name,type_id,def_value,short_desc,section_id) valu
 
 insert into ttrss_prefs (pref_name,type_id,def_value,short_desc,section_id,help_text) values('ALLOW_DUPLICATE_POSTS', 1, 'true', 'Allow duplicate posts',1, 'This option is useful when you are reading several planet-type aggregators with partially colliding userbase. When disabled, it forces same posts from different feeds to appear only once.');
 
-insert into ttrss_prefs (pref_name,type_id,def_value,short_desc,section_id) values('ENABLE_FEED_CATS', 1, 'false', 'Enable feed categories',2);
+insert into ttrss_prefs (pref_name,type_id,def_value,short_desc,section_id) values('ENABLE_FEED_CATS', 1, 'true', 'Enable feed categories',2);
 
 insert into ttrss_prefs (pref_name,type_id,def_value,short_desc,section_id) values('SHOW_CONTENT_PREVIEW', 1, 'true', 'Show content preview in headlines list',2);
 

@@ -288,7 +288,8 @@ function getSelectedFeeds() {
 	var rv = [];
 
 	items.each(function(item) {
-		rv.push(tree.model.store.getValue(item, 'bare_id'));
+		if (item.id[0].match("FEED:"))
+			rv.push(tree.model.store.getValue(item, 'bare_id'));
 	});
 
 	return rv;
@@ -679,95 +680,107 @@ function editSelectedFeeds() {
 			return;
 		}
 
-		notify("");
+		notify_progress("Loading, please wait...");
 
 		var query = "backend.php?op=pref-feeds&subop=editfeeds&ids=" +
 			param_escape(rows.toString());
 
+		console.log(query);
+
 		if (dijit.byId("feedEditDlg"))
 			dijit.byId("feedEditDlg").destroyRecursive();
 
-		dialog = new dijit.Dialog({
-			id: "feedEditDlg",
-			title: __("Edit Multiple Feeds"),
-			style: "width: 600px",
-			getChildByName: function (name) {
-				var rv = null
-				this.getChildren().each(
-					function(child) {
-						if (child.name == name) {
-							rv = child;
-							return;
+		new Ajax.Request("backend.php", {
+			parameters: query,
+			onComplete: function(transport) {
+
+				notify("");
+
+				var dialog = new dijit.Dialog({
+					id: "feedEditDlg",
+					title: __("Edit Multiple Feeds"),
+					style: "width: 600px",
+					getChildByName: function (name) {
+						var rv = null
+						this.getChildren().each(
+							function(child) {
+								if (child.name == name) {
+									rv = child;
+									return;
+								}
+							});
+						return rv;
+					},
+					toggleField: function (checkbox, elem, label) {
+						this.getChildByName(elem).attr('disabled', !checkbox.checked);
+
+						if ($(label))
+							if (checkbox.checked)
+								$(label).removeClassName('insensitive');
+							else
+								$(label).addClassName('insensitive');
+
+					},
+					execute: function() {
+						if (this.validate() && confirm(__("Save changes to selected feeds?"))) {
+							var query = dojo.objectToQuery(this.attr('value'));
+
+							/* Form.serialize ignores unchecked checkboxes */
+
+							if (!query.match("&rtl_content=") &&
+									this.getChildByName('rtl_content').attr('disabled') == false) {
+								query = query + "&rtl_content=false";
+							}
+
+							if (!query.match("&private=") &&
+									this.getChildByName('private').attr('disabled') == false) {
+								query = query + "&private=false";
+							}
+
+							try {
+								if (!query.match("&cache_images=") &&
+										this.getChildByName('cache_images').attr('disabled') == false) {
+									query = query + "&cache_images=false";
+								}
+							} catch (e) { }
+
+							if (!query.match("&include_in_digest=") &&
+									this.getChildByName('include_in_digest').attr('disabled') == false) {
+								query = query + "&include_in_digest=false";
+							}
+
+							if (!query.match("&always_display_enclosures=") &&
+									this.getChildByName('always_display_enclosures').attr('disabled') == false) {
+								query = query + "&always_display_enclosures=false";
+							}
+
+							if (!query.match("&mark_unread_on_update=") &&
+									this.getChildByName('mark_unread_on_update').attr('disabled') == false) {
+								query = query + "&mark_unread_on_update=false";
+							}
+
+							if (!query.match("&update_on_checksum_change=") &&
+									this.getChildByName('update_on_checksum_change').attr('disabled') == false) {
+								query = query + "&update_on_checksum_change=false";
+							}
+
+							console.log(query);
+
+							notify_progress("Saving data...", true);
+
+							new Ajax.Request("backend.php", {
+								parameters: query,
+								onComplete: function(transport) {
+									dialog.hide();
+									updateFeedList();
+							}})
 						}
-					});
-				return rv;
-			},
-			toggleField: function (checkbox, elem, label) {
-				this.getChildByName(elem).attr('disabled', !checkbox.checked);
+					},
+					content: transport.responseText});
 
-				if ($(label))
-					if (checkbox.checked)
-						$(label).removeClassName('insensitive');
-					else
-						$(label).addClassName('insensitive');
+					dialog.show();
 
-			},
-			execute: function() {
-				if (this.validate() && confirm(__("Save changes to selected feeds?"))) {
-					var query = dojo.objectToQuery(this.attr('value'));
-
-					/* Form.serialize ignores unchecked checkboxes */
-
-					if (!query.match("&rtl_content=") &&
-							this.getChildByName('rtl_content').attr('disabled') == false) {
-						query = query + "&rtl_content=false";
-					}
-
-					if (!query.match("&private=") &&
-							this.getChildByName('private').attr('disabled') == false) {
-						query = query + "&private=false";
-					}
-
-					if (!query.match("&cache_images=") &&
-							this.getChildByName('cache_images').attr('disabled') == false) {
-						query = query + "&cache_images=false";
-					}
-
-					if (!query.match("&include_in_digest=") &&
-							this.getChildByName('include_in_digest').attr('disabled') == false) {
-						query = query + "&include_in_digest=false";
-					}
-
-					if (!query.match("&always_display_enclosures=") &&
-							this.getChildByName('always_display_enclosures').attr('disabled') == false) {
-						query = query + "&always_display_enclosures=false";
-					}
-
-					if (!query.match("&mark_unread_on_update=") &&
-							this.getChildByName('mark_unread_on_update').attr('disabled') == false) {
-						query = query + "&mark_unread_on_update=false";
-					}
-
-					if (!query.match("&update_on_checksum_change=") &&
-							this.getChildByName('update_on_checksum_change').attr('disabled') == false) {
-						query = query + "&update_on_checksum_change=false";
-					}
-
-					console.log(query);
-
-					notify_progress("Saving data...", true);
-
-					new Ajax.Request("backend.php", {
-						parameters: query,
-						onComplete: function(transport) {
-							dialog.hide();
-							updateFeedList();
-					}})
-				}
-			},
-			href: query});
-
-		dialog.show();
+			} });
 
 	} catch (e) {
 		exception_error("editSelectedFeeds", e);
@@ -1036,7 +1049,7 @@ function pref_hotkey_handler(e) {
 			if ((keycode == 191 || keychar == '?') && shift_key) { // ?
 				if (!Element.visible("hotkey_help_overlay")) {
 					//Element.show("hotkey_help_overlay");
-					Effect.Appear("hotkey_help_overlay", {duration : 0.3});
+					Effect.Appear("hotkey_help_overlay", {duration : 0.3, to: 0.9});
 				} else {
 					Element.hide("hotkey_help_overlay");
 				}

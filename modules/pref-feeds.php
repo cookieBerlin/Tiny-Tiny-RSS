@@ -57,6 +57,7 @@
 					$cat['bare_id'] = $feed_id;
 					$cat['name'] = $line['title'];
 					$cat['items'] = array();
+					$cat['checkbox'] = false;
 					$cat['type'] = 'category';
 
 					$feed_result = db_query($link, "SELECT id, title, last_error,
@@ -95,6 +96,7 @@
 				$cat['name'] = __("Uncategorized");
 				$cat['items'] = array();
 				$cat['type'] = 'category';
+				$cat['checkbox'] = false;
 
 				$feed_result = db_query($link, "SELECT id, title,last_error,
 					".SUBSTRING_FOR_DATE."(last_updated,1,19) AS last_updated
@@ -363,22 +365,15 @@
 
 			$purge_interval = db_fetch_result($result, 0, "purge_interval");
 
-			if (FORCE_ARTICLE_PURGE == 0) {
 
 				/* Purge intl */
 
-				print "<hr/>";
+			print "<hr/>";
+			print __('Article purging:') . " ";
 
-				print __('Article purging:') . " ";
-
-				print_select_hash("purge_interval", $purge_interval, $purge_intervals,
-					'dojoType="dijit.form.Select"');
-
-			} else {
-				print "<input style=\"display : none\" name='purge_interval'
-					dojoType=\"dijit.form.TextBox\" value='$purge_interval'>";
-
-			}
+			print_select_hash("purge_interval", $purge_interval, $purge_intervals,
+				'dojoType="dijit.form.Select" ' .
+					((FORCE_ARTICLE_PURGE == 0) ? "" : 'disabled="1"'));
 
 			print "</div>";
 			print "<div class=\"dlgSec\">".__("Authentication")."</div>";
@@ -716,11 +711,11 @@
 
 			$feed_title = db_escape_string(trim($_POST["title"]));
 			$feed_link = db_escape_string(trim($_POST["feed_url"]));
-			$upd_intl = db_escape_string($_POST["update_interval"]);
-			$purge_intl = db_escape_string($_POST["purge_interval"]);
-			$feed_id = db_escape_string($_POST["id"]); /* editSave */
+			$upd_intl = (int) db_escape_string($_POST["update_interval"]);
+			$purge_intl = (int) db_escape_string($_POST["purge_interval"]);
+			$feed_id = (int) db_escape_string($_POST["id"]); /* editSave */
 			$feed_ids = db_escape_string($_POST["ids"]); /* batchEditSave */
-			$cat_id = db_escape_string($_POST["cat_id"]);
+			$cat_id = (int) db_escape_string($_POST["cat_id"]);
 			$auth_login = db_escape_string(trim($_POST["auth_login"]));
 			$auth_pass = db_escape_string(trim($_POST["auth_pass"]));
 			$private = checkbox_to_sql_bool(db_escape_string($_POST["private"]));
@@ -1282,6 +1277,10 @@
 		print "<div dojoType=\"dijit.layout.AccordionContainer\" region=\"center\">";
 		print "<div id=\"pref-feeds-feeds\" dojoType=\"dijit.layout.AccordionPane\" title=\"".__('Feeds')."\">";
 
+		/* print "<div dojoType=\"dijit.layout.BorderContainer\">";
+		print "<
+			print "</div>"; */
+
 		$result = db_query($link, "SELECT COUNT(id) AS num_errors
 			FROM ttrss_feeds WHERE last_error != '' AND owner_uid = ".$_SESSION["uid"]);
 
@@ -1325,7 +1324,9 @@
 			$feed_search = $_SESSION["prefs_feed_search"];
 		}
 
-		print "<div dojoType=\"dijit.Toolbar\">";
+		print '<div dojoType="dijit.layout.BorderContainer" gutters="false">';
+
+		print "<div region='top' dojoType=\"dijit.Toolbar\">"; #toolbar
 
 		print "<div style='float : right; padding-right : 4px;'>
 			<input dojoType=\"dijit.form.TextBox\" id=\"feed_search\" size=\"20\" type=\"search\"
@@ -1392,6 +1393,9 @@
 
 		print "</div>"; # toolbar
 
+		//print '</div>';
+		print '<div dojoType="dijit.layout.ContentPane" region="center">';
+
 		print "<div id=\"feedlistLoading\">
 		<img src='images/indicator_tiny.gif'>".
 		 __("Loading, please wait...")."</div>";
@@ -1425,6 +1429,9 @@
 		print "<div dojoType=\"dijit.Tooltip\" connectId=\"feedTree\" position=\"below\">
 			".__('<b>Hint:</b> you can drag feeds and categories around.')."
 			</div>";
+
+		print '</div>';
+		print '</div>';
 
 		print "</div>"; # feeds pane
 
@@ -1513,7 +1520,7 @@
 		print "<p>".__('Published articles are exported as a public RSS feed and can be subscribed by anyone who knows the URL specified below.')."</p>";
 
 		$rss_url = '-2::' . htmlspecialchars(get_self_url_prefix() .
-				"/backend.php?op=rss&id=-2&view-mode=all_articles");;
+				"/public.php?op=rss&id=-2&view-mode=all_articles");;
 
 		print "<button dojoType=\"dijit.form.Button\" onclick=\"return displayDlg('generatedFeed', '$rss_url')\">".
 			__('Display URL')."</button> ";

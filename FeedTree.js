@@ -122,15 +122,35 @@ dojo.declare("fox.FeedTree", dijit.Tree, {
 			menu.row_id = bare_id;
 
 			menu.addChild(new dijit.MenuItem({
+				label: __("Mark as read"),
+				onClick: function() {
+					catchupFeed(this.getParent().row_id);
+				}}));
+
+			menu.addChild(new dijit.MenuItem({
 				label: __("Edit feed"),
 				onClick: function() {
-					editFeed(this.getParent().row_id);
+					editFeed(this.getParent().row_id, false);
 				}}));
 
 			menu.addChild(new dijit.MenuItem({
 				label: __("Update feed"),
 				onClick: function() {
 					scheduleFeedUpdate(this.getParent().row_id, false);
+				}}));
+
+			menu.bindDomNode(tnode.domNode);
+			tnode._menu = menu;
+		}
+
+		if (id.match("CAT:") && bare_id > 0) {
+			var menu = new dijit.Menu();
+			menu.row_id = bare_id;
+
+			menu.addChild(new dijit.MenuItem({
+				label: __("Mark as read"),
+				onClick: function() {
+					catchupFeed(this.getParent().row_id, true);
 				}}));
 
 			menu.bindDomNode(tnode.domNode);
@@ -175,7 +195,7 @@ dojo.declare("fox.FeedTree", dijit.Tree, {
 		if (treeNode) {
 			treeNode = treeNode[0];
 			if (!is_cat) this._expandNode(treeNode);
-			this._selectNode(treeNode);
+			this.set("selectedNodes", [treeNode]);
 		}
 	},
 	setFeedIcon: function(feed, is_cat, src) {

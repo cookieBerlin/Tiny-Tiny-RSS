@@ -40,7 +40,7 @@ function loadMoreHeadlines() {
 			offset = num_all;
 		}
 
-		viewfeed(getActiveFeedId(), '', activeFeedIsCat(), offset);
+		viewfeed(getActiveFeedId(), '', activeFeedIsCat(), offset, false, true);
 
 	} catch (e) {
 		exception_error("viewNextFeedPage", e);
@@ -48,7 +48,7 @@ function loadMoreHeadlines() {
 }
 
 
-function viewfeed(feed, subop, is_cat, offset, background) {
+function viewfeed(feed, subop, is_cat, offset, background, infscrol_req) {
 	try {
 		if (is_cat == undefined)
 			is_cat = false;
@@ -58,6 +58,7 @@ function viewfeed(feed, subop, is_cat, offset, background) {
 		if (subop == undefined) subop = '';
 		if (offset == undefined) offset = 0;
 		if (background == undefined) background = false;
+		if (infscrol_req == undefined) infscrol_req = false;
 
 		last_requested_article = 0;
 
@@ -179,7 +180,7 @@ function viewfeed(feed, subop, is_cat, offset, background) {
 			parameters: query,
 			onComplete: function(transport) {
 				setFeedExpandoIcon(feed, is_cat, 'images/blank_icon.gif');
-				headlines_callback2(transport, offset, background);
+				headlines_callback2(transport, offset, background, infscrol_req);
 			} });
 
 	} catch (e) {
@@ -456,3 +457,30 @@ function getNextUnreadFeed(feed, is_cat) {
 	}
 }
 
+function catchupFeed(feed, is_cat) {
+	try {
+		var str = __("Mark all articles in %s as read?");
+		var fn = getFeedName(getActiveFeedId(), activeFeedIsCat());
+
+		str = str.replace("%s", fn);
+
+		if (getInitParam("confirm_feed_catchup") == 1 && !confirm(str)) {
+			return;
+		}
+
+		var catchup_query = "?op=rpc&subop=catchupFeed&feed_id=" +
+			feed + "&is_cat=" + is_cat;
+
+		notify_progress("Loading, please wait...", true);
+
+		new Ajax.Request("backend.php",	{
+			parameters: catchup_query,
+			onComplete: function(transport) {
+					handle_rpc_json(transport);
+					notify("");
+				} });
+
+	} catch (e) {
+		exception_error("catchupFeed", e);
+	}
+}

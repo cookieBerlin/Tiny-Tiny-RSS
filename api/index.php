@@ -10,6 +10,8 @@
 	define('API_STATUS_OK', 0);
 	define('API_STATUS_ERR', 1);
 
+	chdir("..");
+
 	if (defined('ENABLE_GZIP_OUTPUT') && ENABLE_GZIP_OUTPUT) {
 		ob_start("ob_gzhandler");
 	}
@@ -78,8 +80,8 @@
 
 		case "login":
 			$login = db_escape_string($_REQUEST["user"]);
-			$password = db_escape_string($_REQUEST["password"]);
-			$password_base64 = db_escape_string(base64_decode($_REQUEST["password"]));
+			$password = $_REQUEST["password"];
+			$password_base64 = base64_decode($_REQUEST["password"]);
 
 			if (SINGLE_USER_MODE) $login = "admin";
 
@@ -154,8 +156,6 @@
 			$limit = (int) db_escape_string($_REQUEST["limit"]);
 			$offset = (int) db_escape_string($_REQUEST["offset"]);
 
-			chdir(".."); // so feed_has_icon() would work properly for relative ICONS_DIR
-
 			$feeds = api_get_feeds($link, $cat_id, $unread_only, $limit, $offset);
 
 			print api_wrap_reply(API_STATUS_OK, $seq, $feeds);
@@ -207,7 +207,7 @@
 			break;
 
 		case "updateArticle":
-			$article_ids = split(",", db_escape_string($_REQUEST["article_ids"]));
+			$article_ids = array_filter(explode(",", db_escape_string($_REQUEST["article_ids"])), is_numeric);
 			$mode = (int) db_escape_string($_REQUEST["mode"]);
 			$field_raw = (int)db_escape_string($_REQUEST["field"]);
 
@@ -274,7 +274,7 @@
 
 		case "getArticle":
 
-			$article_id = db_escape_string($_REQUEST["article_id"]);
+			$article_id = join(",", array_filter(explode(",", db_escape_string($_REQUEST["article_id"])), is_numeric));
 
 			$query = "SELECT id,title,link,content,feed_id,comments,int_id,
 				marked,unread,published,
